@@ -1,0 +1,13 @@
+{
+  "render_type": "cutout",
+  "parent": "block/cube",
+  "textures": {
+    "north": "avaritia_tweak:block/recipe_generator_table_side",
+    "east": "avaritia_tweak:block/recipe_generator_table_side",
+    "south": "avaritia_tweak:block/recipe_generator_table_side",
+    "west": "avaritia_tweak:block/recipe_generator_table_side",
+    "up": "avaritia_tweak:block/recipe_generator_table_top",
+    "down": "avaritia_tweak:block/recipe_generator_table_bottom",
+    "particle": "avaritia_tweak:block/recipe_generator_table_side"
+  }
+}
