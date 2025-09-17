@@ -19,8 +19,8 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
     public RecipeGeneratorMenu(int id, Inventory playerInventory, @NotNull BlockPos blockPos) {
         super(ModReg.recipe_generator_menu.get(), id, playerInventory, blockPos);
         // 添加9x9输入槽位 (0-80)
-        for(int row = 0; row < 9; ++row) {
-            for(int col = 0; col < 9; ++col) {
+        for (int row = 0; row < 9; ++row) {
+            for (int col = 0; col < 9; ++col) {
                 // 在GUI中的位置: 8 + col*18, 18 + row*18
                 this.addSlot(new Slot(getTileEntity().containers, row * 9 + col, 87 + col * 18, 18 + row * 18));
             }

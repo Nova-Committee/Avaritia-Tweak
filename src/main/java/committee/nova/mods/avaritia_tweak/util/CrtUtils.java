@@ -26,6 +26,7 @@ import java.util.*;
 public class CrtUtils {
     private static final String NEW_LINE = System.lineSeparator() + "\t";
     private static final char[] KEYS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-_*/".toCharArray();
+
     private static String writeTag(CompoundTag tag) {
         return (new MapData(tag).accept(new DataToTextComponentVisitor("", 0)).getString());
     }
@@ -189,7 +190,7 @@ public class CrtUtils {
         try {
             Path scriptsDir = FMLPaths.GAMEDIR.get().resolve("scripts");
             Files.createDirectories(scriptsDir);
-            Path recipePath = scriptsDir.resolve((name == null ? "avaritia_generated_recipe" :  name) + ".zs");
+            Path recipePath = scriptsDir.resolve((name == null ? "avaritia_generated_recipe" : name) + ".zs");
 
             String newRecipe;
             if (shaped) {

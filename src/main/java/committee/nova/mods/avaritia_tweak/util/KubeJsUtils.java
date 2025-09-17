@@ -227,7 +227,7 @@ public class KubeJsUtils {
         try {
             Path scriptsDir = FMLPaths.GAMEDIR.get().resolve("kubejs/server_scripts");
             Files.createDirectories(scriptsDir);
-            Path recipePath = scriptsDir.resolve((name == null ? "avaritia_generated_recipe" :  name) + ".js");
+            Path recipePath = scriptsDir.resolve((name == null ? "avaritia_generated_recipe" : name) + ".js");
 
             String newRecipe;
             if (shaped) {

@@ -1,7 +1,5 @@
 package committee.nova.mods.avaritia_tweak.client.script;
 
-import committee.nova.mods.avaritia.Const;
-import committee.nova.mods.avaritia.Res;
 import committee.nova.mods.avaritia.api.client.screen.BaseContainerScreen;
 import committee.nova.mods.avaritia.api.client.screen.ItemSelectScreen;
 import committee.nova.mods.avaritia.api.client.screen.StringInputScreen;
@@ -18,7 +16,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.NonNullList;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -47,7 +44,7 @@ public class RecipeGeneratorScreen extends BaseContainerScreen<RecipeGeneratorMe
     private CycleButton<String> tierButton; // 等级按钮
 
     public RecipeGeneratorScreen(RecipeGeneratorMenu container, Inventory inventory, Component title) {
-        super(container, inventory, title, new ResourceLocation(AvaritiaTweak.MOD_ID,"textures/gui/recipe_generator.png"), 223, 234);
+        super(container, inventory, title, new ResourceLocation(AvaritiaTweak.MOD_ID, "textures/gui/recipe_generator.png"), 223, 234);
     }
 
 
@@ -150,7 +147,8 @@ public class RecipeGeneratorScreen extends BaseContainerScreen<RecipeGeneratorMe
     @Override
     protected void renderLabels(GuiGraphics pGuiGraphics, int pX, int pY) {
         pGuiGraphics.drawString(this.font, this.title, this.titleLabelX, this.titleLabelY, 4210752, false);
-        if (!this.selectMode) pGuiGraphics.drawString(this.font, Component.translatable("gui.avaritia.recipe_generator.brush"), 180, 36, 4210752, false);
+        if (!this.selectMode)
+            pGuiGraphics.drawString(this.font, Component.translatable("gui.avaritia.recipe_generator.brush"), 180, 36, 4210752, false);
     }
 
     @Override

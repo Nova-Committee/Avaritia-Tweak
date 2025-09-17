@@ -65,7 +65,7 @@ public class RecipeGeneratorTile extends BaseTileEntity {
         this.selectedSlot = tag.getInt("selectedSlot");
         this.containers.clearContent();
         ListTag listtag = tag.getList("Items", 10);
-        for(int i = 0; i < listtag.size(); ++i) {
+        for (int i = 0; i < listtag.size(); ++i) {
             CompoundTag compoundtag = listtag.getCompound(i);
             int j = compoundtag.getByte("Slot") & 255;
             if (j < this.containers.items.size()) {

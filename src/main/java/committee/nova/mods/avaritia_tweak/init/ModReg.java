@@ -9,7 +9,10 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.item.*;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Rarity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -41,7 +44,7 @@ public class ModReg {
     public static RegistryObject<MenuType<RecipeGeneratorMenu>> recipe_generator_menu = menu("recipe_generator_menu", RecipeGeneratorMenu::fromNetwork);
     public static final RegistryObject<CreativeModeTab> CREATIVE_TAB = TABS.register("avaritia_tweak_group", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.tab.avaritia_tweak"))
-            .icon(()-> recipe_generator.get().asItem().getDefaultInstance())
+            .icon(() -> recipe_generator.get().asItem().getDefaultInstance())
             .displayItems((parameters, output) -> {
                 for (var item : ACCEPT_ITEM) {
                     output.accept(item.get());
@@ -97,7 +100,7 @@ public class ModReg {
         return itemBlock(name, block, true, true, new Item.Properties().rarity(rarity));
     }
 
-    public static RegistryObject<Block> itemBlock(String name, Supplier<Block> block,  boolean hasItem, Item.Properties properties) {
+    public static RegistryObject<Block> itemBlock(String name, Supplier<Block> block, boolean hasItem, Item.Properties properties) {
         return itemBlock(name, block, hasItem, true, properties);
     }
 
