@@ -89,13 +89,11 @@ public class RecipeGeneratorScreen extends BaseContainerScreen<RecipeGeneratorMe
                 CycleButton.builder((String value) -> {
                             if (value.equals("1")) {
                                 return Component.literal("KubeJs");
-                            } else if (value.equals("2")) {
-                                return Component.literal("Crt");
                             } else {
-                                return Component.literal("Json");
+                                return Component.literal("Crt");
                             }
                         })
-                        .withValues("1", "2", "3")
+                        .withValues("1", "2")
                         .withInitialValue(String.valueOf(this.outType))
                         .create(centerX + 122, centerY + 185, 60, 15,
                                 Component.translatable("gui.avaritia.recipe_generator.type"),
