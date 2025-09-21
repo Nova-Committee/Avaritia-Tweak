@@ -142,13 +142,11 @@ public class RecipeGeneratorScreen extends BaseContainerScreen<RecipeGeneratorMe
         return CycleButton.builder((String value) -> {
                     if (value.equals("1")) {
                         return Component.literal("KubeJs");
-                    } else if (value.equals("2")) {
-                        return Component.literal("Crt");
                     } else {
-                        return Component.literal("Json");
+                        return Component.literal("Crt");
                     }
                 })
-                .withValues("1", "2", "3")
+                .withValues("1", "2")
                 .withInitialValue(String.valueOf(this.outType))
                 .create(centerX + 122, centerY + 185, 60, 15,
                         Component.translatable("gui.avaritia.recipe_generator.type"),
@@ -314,87 +312,116 @@ public class RecipeGeneratorScreen extends BaseContainerScreen<RecipeGeneratorMe
         // 检查是否点击了槽位
         if (selectMode) {
             if (button == 0) { // 左键点击
-                return handleLeftClick(mouseX, mouseY);
-            } else if (button == 1) { // 右键点击清除选择
-                return handleRightClick(mouseX, mouseY);
+                // 检查输入槽位区域 (9x9网格)
+                int gridX = (int) ((mouseX - (this.leftPos + 8)) / 18);
+                int gridY = (int) ((mouseY - (this.topPos + 18)) / 18);
+
+                if (gridX >= 0 && gridX < 9 && gridY >= 0 && gridY < 9) {
+                    // 点击了输入槽位
+                    int slotIndex = gridY * 9 + gridX;
+                    // 检查槽位是否在当前等级的可用范围内
+                    if (this.isSlotAvailableForCurrentType(slotIndex)) {
+                        this.selectedSlot = slotIndex;
+                        this.openItemSelectScreen(slotIndex);
+                        return true;
+                    }
+                }
+
+                // 检查输出槽位
+                int outputX = (int) ((mouseX - (this.leftPos + 202)) / 18);
+                int outputY = (int) ((mouseY - (this.topPos + 89)) / 18);
+
+                if (outputX == 0 && outputY == 0) {
+                    // 点击了输出槽位
+                    this.selectedSlot = 81;
+                    this.openItemSelectScreen(81);
+                    return true;
+                }
+            } else if (button == 1) { // 右键点击  清除选择
+                // 检查输入槽位区域 (9x9网格)
+                int gridX = (int) ((mouseX - (this.leftPos + 8)) / 18);
+                int gridY = (int) ((mouseY - (this.topPos + 18)) / 18);
+
+                if (gridX >= 0 && gridX < 9 && gridY >= 0 && gridY < 9) {
+                    // 点击了输入槽位
+                    int slotIndex = gridY * 9 + gridX;
+                    // 检查槽位是否在当前等级的可用范围内
+                    if (this.isSlotAvailableForCurrentType(slotIndex)) {
+                        if (!this.menu.getSlotItem(slotIndex).isEmpty()) {
+                            this.menu.getSlot(slotIndex).set(ItemStack.EMPTY);
+                        }
+                        return true;
+                    }
+                }
+                // 检查输出槽位
+                int outputX = (int) ((mouseX - (this.leftPos + 202)) / 18);
+                int outputY = (int) ((mouseY - (this.topPos + 89)) / 18);
+
+                if (outputX == 0 && outputY == 0) {
+                    // 点击了输出槽位
+                    this.selectedSlot = 81;
+                    if (!this.menu.getSlotItem(81).isEmpty()) this.menu.getSlot(81).set(ItemStack.EMPTY);
+                    return true;
+                }
             }
         } else {
             if (button == 0) {
-                return handleLeftClick(mouseX, mouseY);
+                // 检查输入槽位区域 (9x9网格)
+                int gridX = (int) ((mouseX - (this.leftPos + 8)) / 18);
+                int gridY = (int) ((mouseY - (this.topPos + 18)) / 18);
+
+                if (gridX >= 0 && gridX < 9 && gridY >= 0 && gridY < 9) {
+                    // 点击了输入槽位
+                    int slotIndex = gridY * 9 + gridX;
+                    // 检查槽位是否在当前等级的可用范围内
+                    if (this.isSlotAvailableForCurrentType(slotIndex)) {
+                        this.selectedSlot = slotIndex;
+                        this.menu.getSlot(slotIndex).set(this.brushItem.copy());
+                        return true;
+                    }
+                }
+
+                // 检查输出槽位
+                int outputX = (int) ((mouseX - (this.leftPos + 202)) / 18);
+                int outputY = (int) ((mouseY - (this.topPos + 89)) / 18);
+
+                if (outputX == 0 && outputY == 0) {
+                    // 点击了输出槽位
+                    this.selectedSlot = 81;
+                    this.openItemSelectScreen(81);
+                    return true;
+                }
             } else if (button == 1) {
-                return handleRightClick(mouseX, mouseY);
+                // 检查输入槽位区域 (9x9网格)
+                int gridX = (int) ((mouseX - (this.leftPos + 8)) / 18);
+                int gridY = (int) ((mouseY - (this.topPos + 18)) / 18);
+
+                if (gridX >= 0 && gridX < 9 && gridY >= 0 && gridY < 9) {
+                    // 点击了输入槽位
+                    int slotIndex = gridY * 9 + gridX;
+                    // 检查槽位是否在当前等级的可用范围内
+                    if (this.isSlotAvailableForCurrentType(slotIndex)) {
+                        if (!this.menu.getSlotItem(slotIndex).isEmpty()) {
+                            this.menu.getSlot(slotIndex).set(ItemStack.EMPTY);
+                        }
+                        return true;
+                    }
+                }
+                // 检查输出槽位
+                int outputX = (int) ((mouseX - (this.leftPos + 202)) / 18);
+                int outputY = (int) ((mouseY - (this.topPos + 89)) / 18);
+
+                if (outputX == 0 && outputY == 0) {
+                    // 点击了输出槽位
+                    this.selectedSlot = 81;
+                    if (!this.menu.getSlotItem(81).isEmpty()) {
+                        this.menu.getSlot(81).set(ItemStack.EMPTY);
+                    }
+                    return true;
+                }
             }
         }
-
         return super.mouseClicked(mouseX, mouseY, button);
-    }
-
-    // 处理左键点击
-    private boolean handleLeftClick(double mouseX, double mouseY) {
-        // 检查输入槽位区域 (9x9网格)
-        int gridX = (int) ((mouseX - (this.leftPos + 8)) / 18);
-        int gridY = (int) ((mouseY - (this.topPos + 18)) / 18);
-
-        if (gridX >= 0 && gridX < 9 && gridY >= 0 && gridY < 9) {
-            // 点击了输入槽位
-            int slotIndex = gridY * 9 + gridX;
-            // 检查槽位是否对当前类型可用
-            if (this.isSlotAvailableForCurrentType(slotIndex)) {
-                this.selectedSlot = slotIndex;
-                if (this.selectMode) {
-                    this.openItemSelectScreen(slotIndex);
-                } else {
-                    this.menu.getSlot(slotIndex).set(this.brushItem.copy());
-                }
-                return true;
-            }
-        }
-
-        // 检查输出槽位
-        int outputX = (int) ((mouseX - (this.leftPos + 202)) / 18);
-        int outputY = (int) ((mouseY - (this.topPos + 89)) / 18);
-
-        if (outputX == 0 && outputY == 0) {
-            // 点击了输出槽位
-            this.selectedSlot = 81;
-            this.openItemSelectScreen(81);
-            return true;
-        }
-
-        return false;
-    }
-
-    // 处理右键点击
-    private boolean handleRightClick(double mouseX, double mouseY) {
-        // 检查输入槽位区域 (9x9网格)
-        int gridX = (int) ((mouseX - (this.leftPos + 8)) / 18);
-        int gridY = (int) ((mouseY - (this.topPos + 18)) / 18);
-
-        if (gridX >= 0 && gridX < 9 && gridY >= 0 && gridY < 9) {
-            // 点击了输入槽位
-            int slotIndex = gridY * 9 + gridX;
-            // 检查槽位是否对当前类型可用
-            if (this.isSlotAvailableForCurrentType(slotIndex)) {
-                if (!this.menu.getSlotItem(slotIndex).isEmpty()) {
-                    this.menu.getSlot(slotIndex).set(ItemStack.EMPTY);
-                }
-                return true;
-            }
-        }
-
-        // 检查输出槽位
-        int outputX = (int) ((mouseX - (this.leftPos + 202)) / 18);
-        int outputY = (int) ((mouseY - (this.topPos + 89)) / 18);
-
-        if (outputX == 0 && outputY == 0) {
-            // 点击了输出槽位
-            this.selectedSlot = 81;
-            if (!this.menu.getSlotItem(81).isEmpty())
-                this.menu.getSlot(81).set(ItemStack.EMPTY);
-            return true;
-        }
-
-        return false;
     }
 
     private void openItemSelectScreen(int slotIndex) {

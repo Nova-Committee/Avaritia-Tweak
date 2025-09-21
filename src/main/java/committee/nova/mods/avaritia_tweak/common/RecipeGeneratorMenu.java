@@ -45,15 +45,6 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
         };
     }
 
-    // 检查指定槽位是否在当前等级的可用范围内（从中心向外扩散）
-    public boolean isSlotAvailableForTier(int slotIndex, int tier) {
-        if (slotIndex >= 81) return slotIndex == 81; // 输出槽位总是可用
-
-        // 获取中心向外扩散的可用槽位集合
-        Set<Integer> availableSlots = getAvailableSlotsSetForTier(tier);
-        return availableSlots.contains(slotIndex);
-    }
-
     // 获取指定等级的可用槽位集合（从中心向外扩散）
     public Set<Integer> getAvailableSlotsSetForTier(int tier) {
         Set<Integer> availableSlots = new HashSet<>();
