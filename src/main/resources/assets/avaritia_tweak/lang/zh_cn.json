@@ -1,4 +1,29 @@
 {
   "itemGroup.tab.avaritia_tweak": "无尽：魔改",
-  "block.avaritia.recipe_generator_table": "配方生成器:无尽工作台"
+  "block.avaritia_tweak.recipe_generator_table": "配方生成器:无尽工作台",
+  "gui.avaritia.recipe_generator.select": "选择",
+  "gui.avaritia.recipe_generator.brush": "画刷",
+  "gui.avaritia.recipe_generator.shape": "有序",
+  "gui.avaritia.recipe_generator.shapeless": "无序",
+  "gui.avaritia.recipe_generator.tier": "等级",
+  "gui.avaritia.recipe_generator.type": "方式",
+  "gui.avaritia.recipe_generator.generate": "生成",
+  "gui.avaritia.recipe_generator.select_recipe": "选择配方",
+  "gui.avaritia.recipe_select.title": "选择配方",
+  "gui.avaritia.recipe_select.type": "类型: %s",
+  "gui.avaritia.recipe_select.tier": "等级: %s",
+  "gui.avaritia.recipe_select.id": "ID: %s",
+  "gui.avaritia.recipe_select.select_prompt": "请选择一个配方",
+  "gui.avaritia.recipe_generator.select_script": "请选择一个脚本",
+  "gui.avaritia.recipe_generator.files": "文件列表",
+  "gui.avaritia.recipe_generator.scripts": "脚本列表",
+  "gui.avaritia.recipe_generator.editor": "配方编辑器",
+  "gui.avaritia.recipe_generator.recipe_type": "配方类型: %s",
+
+  "tooltip.avaritia_tweak.compressor": "中子素压缩",
+  "tooltip.avaritia_tweak.sculk_crafting_table": "幽匿合成",
+  "tooltip.avaritia_tweak.end_crafting_table": "终末合成",
+  "tooltip.avaritia_tweak.nether_crafting_table": "炼狱合成",
+  "tooltip.avaritia_tweak.extreme_crafting_table": "终焉合成",
+  "tooltip.avaritia_tweak.extreme_smithing_table": "终焉锻造"
 }

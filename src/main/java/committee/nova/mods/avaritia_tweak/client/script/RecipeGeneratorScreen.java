@@ -1,10 +1,12 @@
 package committee.nova.mods.avaritia_tweak.client.script;
 
-import committee.nova.mods.avaritia.Res;
 import committee.nova.mods.avaritia.api.client.screen.BaseContainerScreen;
 import committee.nova.mods.avaritia.api.client.screen.ItemSelectScreen;
 import committee.nova.mods.avaritia.api.client.screen.StringInputScreen;
+import committee.nova.mods.avaritia.api.client.screen.component.OperationButton;
+import committee.nova.mods.avaritia.api.client.screen.component.OperationButtonType;
 import committee.nova.mods.avaritia.api.client.screen.component.Text;
+import committee.nova.mods.avaritia.api.client.screen.coordinate.Coordinate;
 import committee.nova.mods.avaritia.api.client.util.GuiUtils;
 import committee.nova.mods.avaritia.common.crafting.recipe.ExtremeSmithingRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ShapedTableCraftingRecipe;
@@ -13,6 +15,7 @@ import committee.nova.mods.avaritia_tweak.AvaritiaTweak;
 import committee.nova.mods.avaritia_tweak.common.RecipeGeneratorMenu;
 import committee.nova.mods.avaritia_tweak.util.CrtUtils;
 import committee.nova.mods.avaritia_tweak.util.KubeJsUtils;
+import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -26,42 +29,49 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.*;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 /**
  * @author: cnlimiter
  */
 public class RecipeGeneratorScreen extends BaseContainerScreen<RecipeGeneratorMenu> {
-    // 配方类型枚举
-    public enum RecipeType {
-        VALLIA_SHAPED,      // 原版有序工作台
-        VALLIA_SHAPELESS,   // 原版无序工作台
-        VALLIA_SMITHING,    // 原版锻造台
-        VALLIA_SMELTING,    // 原版熔炉
-        VALLIA_BLASTING,    // 原版高炉
-        AVARITIA_SHAPED,    // 无尽有序工作台
-        AVARITIA_SHAPELESS, // 无尽无序工作台
-        AVARITIA_SMITHING,  // 无尽锻造台
-        AVARITIA_COMPRESSOR;// 无尽压缩机
+    /**
+     * 操作按钮
+     */
+    private final Map<Integer, OperationButton> TYPE_BUTTONS = new HashMap<>();
 
-        RecipeType() {
-        }
-    }
 
-    private RecipeType type = RecipeType.VALLIA_SHAPED; // 配方类型
+    private RecipeType type = RecipeType.AVARITIA_SCULK_CRAFTING; // 配方类型
     private int tier = 1; // 等级 (1-4)
     private int outType = 1; // 生成方式
     private boolean selectMode = false; // 模式
-    private ItemStack brushItem = ItemStack.EMPTY; // 画刷物品
     private int selectedSlot = -1; // 当前选择的槽位索引
 
-    private Button brushButton; // 画刷按钮
-    private CycleButton<String> tierButton; // 等级按钮
-    private CycleButton<String> typeButton; // 类型按钮
+    private OperationButton brushButton; // 画刷按钮
+    private ItemStack brushItem = ItemStack.EMPTY; // 画刷物品
+//private CycleButton<String> tierButton; // 等级按钮
+    //private CycleButton<String> typeButton; // 类型按钮
 
     public RecipeGeneratorScreen(RecipeGeneratorMenu container, Inventory inventory, Component title) {
-        super(container, inventory, title, new ResourceLocation(AvaritiaTweak.MOD_ID, "textures/gui/recipe_generator.png"), 223, 234);
+        super(container, inventory, title, new ResourceLocation(AvaritiaTweak.MOD_ID, "textures/gui/recipe_generator_back.png"), 234, 278, 512, 512);
+    }
+
+
+    private void updateLayout() {
+        for (RecipeType type1 : RecipeType.values()) {
+            this.TYPE_BUTTONS.put(type1.getCode(), new OperationButton(type1.getCode(), context -> {
+                        // 绘制背景
+                        int lineColor = context.button().isHovered() ? 0xEEFFFFFF : 0xEE000000;
+                        GuiUtils.fill(context.graphics(), (int) context.button().getX(), (int) context.button().getY(), (int) context.button().getWidth(), (int) context.button().getHeight(), 0xEE707070, 2);
+                        GuiUtils.fillOutLine(context.graphics(), (int) context.button().getX(), (int) context.button().getY(), (int) context.button().getWidth(), (int) context.button().getHeight(), 1, lineColor, 2);
+                        context.button().setTooltip(Text.i18n("tooltip.avaritia_tweak." + type1.name));
+                    })
+                            .setTexture(new ResourceLocation(AvaritiaTweak.MOD_ID, "textures/gui/recipe_generator_back.png"))
+                            .setCoordinate(type1.area)
+                            .setNormal(type1.normal)
+                            .setTap(type1.tap)
+            );
+        }
     }
 
 
@@ -73,12 +83,6 @@ public class RecipeGeneratorScreen extends BaseContainerScreen<RecipeGeneratorMe
 
         // 添加选择模式切换按钮
         this.addRenderableWidget(createModeButton(centerX, centerY));
-
-        // 添加类型选择按钮
-        this.typeButton = this.addRenderableWidget(createTypeButton(centerX, centerY));
-
-        // 添加等级选择按钮
-        this.tierButton = this.addRenderableWidget(createTierButton(centerX, centerY));
 
         // 添加生成方式选择按钮
         this.addRenderableWidget(createFormatButton(centerX, centerY));
@@ -105,27 +109,27 @@ public class RecipeGeneratorScreen extends BaseContainerScreen<RecipeGeneratorMe
     }
 
     // 创建类型选择按钮
-    private CycleButton<String> createTypeButton(int centerX, int centerY) {
-        return CycleButton.builder(Component::literal)
-                .withValues(
-                        RecipeType.VALLIA_SHAPED.name(),
-                        RecipeType.VALLIA_SHAPELESS.name(),
-                        RecipeType.VALLIA_SMITHING.name(),
-                        RecipeType.VALLIA_SMELTING.name(),
-                        RecipeType.VALLIA_BLASTING.name(),
-                        RecipeType.AVARITIA_SHAPED.name(),
-                        RecipeType.AVARITIA_SHAPELESS.name(),
-                        RecipeType.AVARITIA_SMITHING.name(),
-                        RecipeType.AVARITIA_COMPRESSOR.name()
-                )
-                .withInitialValue(this.type.name())
-                .create(centerX + 42, centerY + 185, 40, 15,
-                        Component.translatable("gui.avaritia.recipe_generator.type"),
-                        (button, value) -> {
-                            this.type = RecipeType.valueOf(value);
-                            updateButtonVisibility();
-                        });
-    }
+//    private CycleButton<String> createTypeButton(int centerX, int centerY) {
+//        return CycleButton.builder(Component::literal)
+//                .withValues(
+//                        RecipeType.VALLIA_SHAPED.name(),
+//                        RecipeType.VALLIA_SHAPELESS.name(),
+//                        RecipeType.VALLIA_SMITHING.name(),
+//                        RecipeType.VALLIA_SMELTING.name(),
+//                        RecipeType.VALLIA_BLASTING.name(),
+//                        RecipeType.AVARITIA_SHAPED.name(),
+//                        RecipeType.AVARITIA_SHAPELESS.name(),
+//                        RecipeType.AVARITIA_SMITHING.name(),
+//                        RecipeType.AVARITIA_COMPRESSOR.name()
+//                )
+//                .withInitialValue(this.type.name())
+//                .create(centerX + 42, centerY + 185, 40, 15,
+//                        Component.translatable("gui.avaritia.recipe_generator.type"),
+//                        (button, value) -> {
+//                            this.type = RecipeType.valueOf(value);
+//                            updateButtonVisibility();
+//                        });
+//    }
 
     // 创建等级选择按钮
     private CycleButton<String> createTierButton(int centerX, int centerY) {

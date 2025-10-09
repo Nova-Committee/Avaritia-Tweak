@@ -37,7 +37,7 @@ public class RecipeGeneratorTile extends BaseTileEntity {
 
     @Override
     public @NotNull Component getDisplayName() {
-        return Localizable.of("block.avaritia.recipe_generator_table").build();
+        return Localizable.of("block.avaritia_tweak.recipe_generator_table").build();
     }
 
     @Override

@@ -1,4 +1,29 @@
 {
-  "itemGroup.tab.avaritia_tweak": "avaritia_tweak",
-  "block.avaritia.recipe_generator_table": "Recipe Generator:Avaritia Table"
+  "itemGroup.tab.avaritia_tweak": "Avaritia Tweak",
+  "block.avaritia_tweak.recipe_generator_table": "Recipe Generator:Avaritia Table",
+  "gui.avaritia.recipe_generator.select": "Select",
+  "gui.avaritia.recipe_generator.brush": "Brush",
+  "gui.avaritia.recipe_generator.shape": "Shape",
+  "gui.avaritia.recipe_generator.shapeless": "Shapeless",
+  "gui.avaritia.recipe_generator.tier": "Tier",
+  "gui.avaritia.recipe_generator.type": "Type",
+  "gui.avaritia.recipe_generator.generate": "Gen",
+  "gui.avaritia.recipe_generator.select_recipe": "Select Recipe",
+  "gui.avaritia.recipe_select.title": "Select Recipe",
+  "gui.avaritia.recipe_select.type": "Type: %s",
+  "gui.avaritia.recipe_select.tier": "Tier: %s",
+  "gui.avaritia.recipe_select.id": "ID: %s",
+  "gui.avaritia.recipe_select.select_prompt": "Pls Select Recipe",
+  "gui.avaritia.recipe_generator.select_script": "Pls Select Script",
+  "gui.avaritia.recipe_generator.files": "File Lists",
+  "gui.avaritia.recipe_generator.scripts": "Script Lists",
+  "gui.avaritia.recipe_generator.editor": "Recipe Editor",
+  "gui.avaritia.recipe_generator.recipe_type": "Recipe Type: %s",
+
+  "tooltip.avaritia_tweak.compressor": "Neutronium Compressor",
+  "tooltip.avaritia_tweak.sculk_crafting_table": "Sculk Craft",
+  "tooltip.avaritia_tweak.end_crafting_table": "End Craft",
+  "tooltip.avaritia_tweak.nether_crafting_table": "Nether Craft",
+  "tooltip.avaritia_tweak.extreme_crafting_table": "Extreme Craft",
+  "tooltip.avaritia_tweak.extreme_smithing_table": "Extreme Smithing"
 }
