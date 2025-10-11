@@ -9,12 +9,12 @@ import net.minecraft.world.item.crafting.Recipe;
  */
 public class ScriptEntry {
     private String name;
-    private RecipeType recipeType;
+    private RecipeTypes recipeType;
     private int tier;
     private Recipe<?> recipe;
     private String scriptContent;
 
-    public ScriptEntry(String name, RecipeType recipeType, int tier, Recipe<?> recipe, String scriptContent) {
+    public ScriptEntry(String name, RecipeTypes recipeType, int tier, Recipe<?> recipe, String scriptContent) {
         this.name = name;
         this.recipeType = recipeType;
         this.tier = tier;
@@ -31,11 +31,11 @@ public class ScriptEntry {
         this.name = name;
     }
 
-    public RecipeType getRecipeType() {
+    public RecipeTypes getRecipeType() {
         return recipeType;
     }
 
-    public void setRecipeType(RecipeType recipeType) {
+    public void setRecipeType(RecipeTypes recipeType) {
         this.recipeType = recipeType;
     }
 
@@ -86,7 +86,7 @@ public class ScriptEntry {
             int tier = jsonObject.get("tier").getAsInt();
             String scriptContent = jsonObject.get("scriptContent").getAsString();
 
-            RecipeType recipeType = RecipeType.valueOf(recipeTypeStr);
+            RecipeTypes recipeType = RecipeTypes.valueOf(recipeTypeStr);
 
             return new ScriptEntry(name, recipeType, tier, null, scriptContent);
         } catch (Exception e) {

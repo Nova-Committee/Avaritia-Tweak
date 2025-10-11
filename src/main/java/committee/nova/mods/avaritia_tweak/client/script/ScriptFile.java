@@ -101,7 +101,7 @@ public class ScriptFile {
                     int tier = parts.length > 2 ? Integer.parseInt(parts[2].trim()) : 1;
 
                     currentScript = new ScriptEntry(name,
-                            RecipeType.valueOf(type),
+                            RecipeTypes.valueOf(type),
                             tier, null, "");
                 } else if (line.trim().startsWith("// SCRIPT_END")) {
                     // 脚本结束标记
@@ -248,7 +248,7 @@ public class ScriptFile {
     /**
      * 从配方创建脚本条目
      */
-    public ScriptEntry createScriptFromRecipe(String name, RecipeType type,
+    public ScriptEntry createScriptFromRecipe(String name, RecipeTypes type,
                                               int tier, Recipe<?> recipe) {
         // 生成脚本内容（这里只是一个示例，实际实现需要根据配方类型生成具体脚本）
         StringBuilder content = new StringBuilder();

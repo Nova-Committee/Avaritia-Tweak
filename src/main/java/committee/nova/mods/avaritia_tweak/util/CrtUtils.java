@@ -63,7 +63,7 @@ public class CrtUtils {
 
         string.append("mods.avaritia.").append("CraftingTable").append(".addShaped(\"").append(uuid).append("\", ");
         string.append(tier).append(", ");
-        string.append("<").append(outputIdString).append(">");
+        string.append("<").append(outputIdString).append(">, ");
         if (useNbt && !output.isEmpty() && output.hasTag() && ModList.get().isLoaded("crafttweaker")) {
             var nbt = output.getTag();
             var tag = writeTag(nbt);
@@ -148,7 +148,7 @@ public class CrtUtils {
 
         string.append("mods.avaritia.").append("CraftingTable").append(".addShapeless(\"").append(uuid).append("\", ");
         string.append(tier).append(", ");
-        string.append("<").append(outputIdString).append(">");
+        string.append("<").append(outputIdString).append(">, ");
         if (useNbt && !output.isEmpty() && output.hasTag() && ModList.get().isLoaded("crafttweaker")) {
             var nbt = output.getTag();
             var tag = writeTag(nbt);
