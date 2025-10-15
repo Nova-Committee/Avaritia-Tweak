@@ -3,11 +3,7 @@ package committee.nova.mods.avaritia_tweak.client.script;
 import committee.nova.mods.avaritia.api.client.screen.BaseContainerScreen;
 import committee.nova.mods.avaritia.api.client.screen.ItemSelectScreen;
 import committee.nova.mods.avaritia.api.client.screen.StringInputScreen;
-import committee.nova.mods.avaritia.api.client.screen.component.CyclingTextureButton;
-import committee.nova.mods.avaritia.api.client.screen.component.KeyEventManager;
-import committee.nova.mods.avaritia.api.client.screen.component.OperationButton;
-import committee.nova.mods.avaritia.api.client.screen.component.Text;
-import committee.nova.mods.avaritia.api.client.screen.coordinate.Coordinate;
+import committee.nova.mods.avaritia.api.client.screen.component.*;
 import committee.nova.mods.avaritia.api.client.util.GuiUtils;
 import committee.nova.mods.avaritia.common.crafting.recipe.ExtremeSmithingRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ShapedTableCraftingRecipe;
@@ -16,9 +12,10 @@ import committee.nova.mods.avaritia_tweak.AvaritiaTweak;
 import committee.nova.mods.avaritia_tweak.common.RecipeGeneratorMenu;
 import committee.nova.mods.avaritia_tweak.util.CrtUtils;
 import committee.nova.mods.avaritia_tweak.util.KubeJsUtils;
+import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.NonNullList;
 import net.minecraft.network.chat.Component;
@@ -27,13 +24,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.*;
-import org.lwjgl.glfw.GLFW;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author cnlimiter
@@ -42,26 +32,45 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
     public static final ResourceLocation BACKGROUND = new ResourceLocation(AvaritiaTweak.MOD_ID, "textures/gui/recipe_generator_back.png");
     public static final ResourceLocation WIDGETS = new ResourceLocation(AvaritiaTweak.MOD_ID, "textures/gui/recipe_generator_craft.png");
 
-    private final KeyEventManager keyManager = new KeyEventManager();
 
     // 当前选中的选项卡
     private RecipeTypes currentTab = RecipeTypes.VANILLA_CRAFTING;
     // 模式控制
-    private boolean selectMode = true; // 默认为选择模式
+    private Mode selectMode = Mode.SELECT; // 默认为选择模式
     private ItemStack brushItem = ItemStack.EMPTY;
     // 脚本生成设置
-    private int scriptType = 1; // 1=KubeJS, 2=CRT
+    private Out scriptType = Out.JS; // 1=KubeJS, 2=CRT
 
     // UI组件
-    private OperationButton modeToggleButton;
-    private OperationButton brushButton;
-    private OperationButton recipeFillButton; // 新增配方填充按钮
-    private OperationButton scriptTypeButton;
-    private OperationButton generateButton;
+    private CycleTextureButton<Mode> modeToggleButton;
+    private Button brushButton;
+    private CycleTextureButton<Out> scriptTypeButton;
+    private Button generateButton;
 
-    // 选项卡按钮映射
-    private final Map<RecipeTypes, OperationButton> tabButtons = new HashMap<>();
-    private final List<OperationButton> actionButtons = new ArrayList<>();
+    @Getter
+    enum Mode {
+        SELECT(0),
+        BRUSH(1);
+        private final int index;
+        private final Component name;
+        private Mode(int index) {
+            this.index = index;
+            this.name = Component.translatable(this.name() + "_mode");
+        }
+    }
+
+    @Getter
+    enum Out {
+        JS(0),
+        ZS(1);
+        private final int index;
+        private final Component name;
+        private Out(int index) {
+            this.index = index;
+            this.name = Component.translatable(this.name() + "_out");
+        }
+    }
+
 
     public RecipeGeneratorScreen2(RecipeGeneratorMenu container, Inventory inventory, Component title) {
         super(container, inventory, title, BACKGROUND, 234, 278, 512, 512);
@@ -70,63 +79,91 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
     @Override
     protected void subInit() {
         super.subInit();
-        int centerX = (this.width - this.imageWidth) / 2;
-        int centerY = (this.height - this.imageHeight) / 2;
 
         // 初始化选项卡按钮
-        initTabButtons(centerX, centerY);
+        initTabButtons(this.leftPos, this.topPos);
 
         // 初始化其他控件
-        initControlButtons(centerX, centerY);
+        initControlButtons(this.leftPos, this.topPos);
     }
 
     private void initTabButtons(int centerX, int centerY) {
-        // 清除旧按钮
-        tabButtons.clear();
-
-        // 创建新的选项卡按钮
         int tabIndex = 0;
         for (RecipeTypes tab : RecipeTypes.values()) {
-            OperationButton tabButton = new OperationButton(tab.ordinal(), BACKGROUND)
-                    .setX(centerX).setY(centerY + tabIndex * 23)
-                    .setNormal(tab.normal)
-                    .setTap(tab.tap);
-            tabButtons.put(tab, tabButton);
+            this.addRenderableWidget(
+                    TextureButton.builder(Component.translatable(tab.name()), BACKGROUND, button -> {
+                                switchToTab(tab);
+                            })
+                            .bounds(centerX + tab.x, centerY + tab.y, 22, 22)
+                            .texStart(235,  tabIndex * 23)
+                            .xDiffTex(22)
+                            .textureSize(512, 512)
+                            .build()
+            );
             tabIndex++;
         }
     }
 
     private void initControlButtons(int centerX, int centerY) {
         // 模式切换按钮
-        modeToggleButton = new OperationButton(100, BACKGROUND)
-                .setX(centerX + 203).setY(centerY + 3)
-                .setNormal(new Coordinate().setU0(235).setV0(140).setUWidth(22).setVHeight(24))
-                .setTap(new Coordinate().setU0(258).setV0(140).setUWidth(22).setVHeight(24));
-        actionButtons.add(modeToggleButton);
+        modeToggleButton = this.addRenderableWidget(
+                CycleTextureButton.builder(Mode::getName)
+                        .withValues(Mode.values())
+                        .withInitialValue(Mode.SELECT)
+                        .bounds(centerX + 203, centerY + 3, 22, 24)
+                        .texStart(0, 304)
+                        .xDiffTex(23)
+                        .textureSize(512, 512)
+                        .create(BACKGROUND,
+                                Component.literal(""), (button, mode) -> {
+                                    selectMode = mode;
+                                })
+        );
+
 
         // 画笔物品/配方选择按钮
-        brushButton = new OperationButton(101, BACKGROUND)
-                .setX(centerX + 203).setY(centerY + 26)
-                .setNormal(new Coordinate().setU0(235).setV0(115).setUWidth(22).setVHeight(24))
-                .setTap(new Coordinate().setU0(258).setV0(115).setUWidth(22).setVHeight(24));
-        actionButtons.add(brushButton);
+        brushButton = this.addRenderableWidget(
+                TextureButton.builder(Component.literal(""), BACKGROUND, button -> {
+                            switch (selectMode) {
+                                case SELECT -> openRecipeSelectScreen();
+                                case BRUSH -> openBrushItemSelector();
+                            }
+                        })
+                        .bounds(centerX + 203, centerY + 26, 22, 24)
+                        .texStart(0, 279)
+                        .xDiffTex(23)
+                        .textureSize(512, 512)
+                        .build()
+        );
+
 
         // 脚本类型选择按钮
-        scriptTypeButton = new CyclingTextureButton(102, BACKGROUND)
-                .setTextureCoordinates(List.of(
-                        new Coordinate().setU0(235).setV0(0).setUWidth(22).setVHeight(24)
-                        , new Coordinate().setU0(235).setV0(25).setUWidth(22).setVHeight(24)
-                        , new Coordinate().setU0(235).setV0(50).setUWidth(22).setVHeight(24)
-                ), null, null)
-                .setX(centerX + 203).setY(centerY + 155);
-        actionButtons.add(scriptTypeButton);
+        scriptTypeButton =  this.addRenderableWidget(
+                CycleTextureButton.builder(Out::getName)
+                        .withValues(Out.values())
+                        .withInitialValue(Out.JS)
+                        .bounds(centerX + 203, centerY + 155, 22, 24)
+                        .texStart(0, 404)
+                        .xDiffTex(23)
+                        .textureSize(512, 512)
+                        .create(BACKGROUND,
+                                Component.literal(""), (button, out) -> {
+                                    scriptType = out;
+                                })
+        );
 
         // 生成按钮
-        generateButton = new OperationButton(103, BACKGROUND)
-                .setX(centerX + 226).setY(centerY + 155)
-                .setNormal(new Coordinate().setU0(235).setV0(190).setUWidth(22).setVHeight(24))
-                .setTap(new Coordinate().setU0(258).setV0(190).setUWidth(22).setVHeight(24));
-        actionButtons.add(generateButton);
+        generateButton = this.addRenderableWidget(TextureButton.builder(Component.literal(""), BACKGROUND, button -> {
+                            generateScript();
+
+                        })
+                        .bounds(centerX + 226, centerY + 135, 22, 24)
+                        .texStart(0, 354)
+                        .xDiffTex(0)
+                        .textureSize(512, 512)
+                        .build()
+        );
+
     }
 
     private void switchToTab(RecipeTypes tab) {
@@ -137,9 +174,6 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
         }
     }
 
-    private void toggleMode() {
-        this.selectMode = !this.selectMode;
-    }
 
     private void openBrushItemSelector() {
         this.minecraft.setScreen(new ItemSelectScreen(
@@ -149,71 +183,60 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
         ));
     }
 
-    private void renderButton(GuiGraphics graphics) {
-        for (OperationButton button : tabButtons.values()) button.render(graphics, keyManager);
-        for (OperationButton button : actionButtons) button.render(graphics, keyManager);
-        for (OperationButton button : tabButtons.values()) button.renderPopup(graphics, this.font, keyManager);
-        for (OperationButton button : actionButtons) button.renderPopup(graphics, this.font, keyManager);
-    }
 
     private void renderSlots(GuiGraphics graphics) {
+        int labelY = 10;
         switch (currentTab) {
             case AVARITIA_EXTREME_CRAFTING -> {
-                GuiUtils.blit(graphics, WIDGETS, 3, 3, 0, 0, 169, 179, 512, 512);
+                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4, this.topPos + labelY + 4, 0, 0, 168, 169, 512, 512);
             }
             case AVARITIA_END_CRAFTING -> {
-                GuiUtils.blit(graphics, WIDGETS, 20, 28, 0, 180, 132, 133, 512, 512);
+                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 18, this.topPos + labelY + 4 + 18, 0, 170, 132, 133, 512, 512);
             }
             case AVARITIA_NETHER_CRAFTING -> {
-                GuiUtils.blit(graphics, WIDGETS, 37, 50, 0, 314, 96, 97, 512, 512);
+                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 2 * 18, this.topPos + labelY + 4 + 2 * 18, 0, 304, 96, 97, 512, 512);
             }
-            case AVARITIA_SCULK_CRAFTING -> {
-                GuiUtils.blit(graphics, WIDGETS, 54, 65, 0, 412, 60, 61, 512, 512);
+            case AVARITIA_SCULK_CRAFTING, VANILLA_CRAFTING -> {
+                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 3 * 18, this.topPos + labelY + 4 + 3 * 18, 0, 402, 60, 61, 512, 512);
             }
             case AVARITIA_EXTREME_SMITHING -> {
-                GuiUtils.blit(graphics, WIDGETS, 32, 62, 172, 14, 60, 62, 512, 512);
+                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 3 * 18, this.topPos + labelY + 4 + 4 * 18, 172, 14, 60, 62, 512, 512);
             }
             case AVARITIA_COMPRESSOR -> {
-                GuiUtils.blit(graphics, WIDGETS, 32, 75, 172, 104, 46, 26, 512, 512);
+                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 4 * 18, this.topPos + labelY + 4 + 4 * 18, 172, 104, 46, 26, 512, 512);
             }
-            case VANILLA_CRAFTING -> {
-                GuiUtils.blit(graphics, WIDGETS, 54, 65, 0, 412, 60, 61, 512, 512);
+            case AVARITIA_SINGULARITY -> {
+                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 4 * 18, this.topPos + labelY + 4 + 4 * 18, 172, 104, 46, 26, 512, 512);
             }
             case VANILLA_SMITHING -> {
-                GuiUtils.blit(graphics, WIDGETS, 32, 75, 172, 77, 60, 26, 512, 512);
+                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 3 * 18, this.topPos + labelY + 4 + 4 * 18, 172, 77, 60, 26, 512, 512);
             }
             case VANILLA_FURNACE -> {
-                GuiUtils.blit(graphics, WIDGETS, 49, 75, 266, 14, 24, 26, 512, 512);
+                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 4 * 18, this.topPos + labelY + 4 + 4 * 18, 266, 14, 24, 26, 512, 512);
             }
             case VANILLA_STONECUTTING -> {
-                GuiUtils.blit(graphics, WIDGETS, 49, 75, 266, 14, 24, 26, 512, 512);
+                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 4 * 18, this.topPos + labelY + 4 + 4 * 18, 266, 14, 24, 26, 512, 512);
             }
         }
-        GuiUtils.blit(graphics, WIDGETS, 190, 72, 233, 14, 32, 34, 512, 512);
+        GuiUtils.blit(graphics, WIDGETS, this.leftPos + 198, this.topPos + 14 + 4 * 18, 266, 14, 24, 26, 512, 512);//输出槽
+        GuiUtils.blit(graphics, WIDGETS, this.leftPos, this.topPos, 171, 0, 170, 13, 512, 512);//标题
 
     }
 
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        guiGraphics.drawString(this.font, this.title, this.titleLabelX, this.titleLabelY, 4210752, false);
+        guiGraphics.drawString(this.font, this.title, this.titleLabelX, this.titleLabelY - 3, 4210752, false);
     }
 
     @Override
     protected void renderBgs(GuiGraphics guiGraphics, float partialTick, int mouseX, int mouseY) {
         super.renderBgs(guiGraphics, partialTick, mouseX, mouseY);
-        this.renderButton(guiGraphics);
         this.renderSlots(guiGraphics);
     }
 
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        keyManager.mouseScrolled(delta, mouseX, mouseY);
-        return true;
-    }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        keyManager.mouseClicked(button, mouseX, mouseY);
         if (button == 0) { // 左键点击
             // 检查输入槽位区域 (9x9网格)
             int gridX = (int) ((mouseX - (this.leftPos + 8)) / 18);
@@ -223,7 +246,7 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
                 // 点击了输入槽位
                 int slotIndex = gridY * 9 + gridX;
                 if (isSlotAvailable(slotIndex)) {
-                    if (selectMode) {
+                    if (selectMode == Mode.SELECT) {
                         // 选择模式：打开物品选择界面
                         openItemSelectScreen(slotIndex);
                     } else {
@@ -276,67 +299,6 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        keyManager.refresh(mouseX, mouseY);
-        AtomicBoolean flag = new AtomicBoolean(false);
-        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT || button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
-            // 选项卡按钮
-            tabButtons.forEach((key, value) -> {
-                if (value.isHovered() && value.isPressed()) {
-                    switchToTab(RecipeTypes.valueOf(value.getOperation()));
-                    flag.set(true);
-                }
-                value.setPressed(false);
-            });
-            // 操作按钮
-            actionButtons.forEach(bt -> {
-                if (bt.isHovered() && bt.isPressed()) {
-                    this.handleActionOperation(bt, button, flag);
-                }
-                bt.setPressed(false);
-            });
-        }
-
-        keyManager.mouseReleased(button, mouseX, mouseY);
-        return flag.get() ? flag.get() : super.mouseReleased(mouseX, mouseY, button);
-    }
-
-    @Override
-    public void mouseMoved(double mouseX, double mouseY) {
-        keyManager.mouseMoved(mouseX, mouseY);
-        super.mouseMoved(mouseX, mouseY);
-    }
-
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        keyManager.keyPressed(keyCode);
-        return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    @Override
-    public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
-        keyManager.keyReleased(keyCode);
-        return super.keyReleased(keyCode, scanCode, modifiers);
-    }
-
-
-    private void handleActionOperation(OperationButton bt, int button, AtomicBoolean flag) {
-        if (bt.getOperation() == 100) {
-            toggleMode();
-            flag.set(true);
-        } else if (bt.getOperation() == 101) {
-            if (this.selectMode) openRecipeSelectScreen(); else openBrushItemSelector();
-            flag.set(true);
-        } else if (bt.getOperation() == 102 && bt instanceof CyclingTextureButton textureButton) {
-            textureButton.cycleTexture();
-            this.scriptType = textureButton.getCurrentTextureIndex();
-            flag.set(true);
-        } else if (bt.getOperation() == 103) {
-            generateScript();
-            flag.set(true);
-        }
-    }
 
 
     private boolean isSlotAvailable(int slotIndex) {
@@ -370,15 +332,7 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
 
     private void fillRecipeIntoSlots(Recipe<?> recipe) {
         // 清空现有槽位
-        for (int i = 0; i < 82; i++) {
-            this.menu.getSlot(i).set(ItemStack.EMPTY);
-        }
-
-        ItemStack result = recipe.getResultItem(this.minecraft.level.registryAccess());
-        if (!result.isEmpty()) {
-            // 设置输出槽
-            this.menu.getSlot(81).set(result.copy());
-        }
+        this.menu.slots.forEach(slot -> slot.set(ItemStack.EMPTY));
 
         // 根据具体配方类型填充输入槽并更新参数
 
@@ -397,6 +351,14 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
         } else if (recipe instanceof BlastingRecipe blastingRecipe) {
             fillBlastingRecipe(blastingRecipe);
         }
+
+        ItemStack result = recipe.getResultItem(this.minecraft.level.registryAccess());
+        if (!result.isEmpty()) {
+            // 设置输出槽
+            this.menu.getSlot(81).set(result.copy());
+        }
+
+
     }
 
     // 填充无尽有序工作台配方
@@ -540,10 +502,10 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
 
     private void doGenerateScript(String fileName) {
         switch (scriptType) {
-            case 1: // KubeJS
+            case JS: // KubeJS
                 KubeJsUtils.exportTableJS(this.menu, true, 4, true, fileName);
                 break;
-            case 2: // CRT
+            case ZS: // CRT
                 CrtUtils.exportTableZS(this.menu, true, 4, true, fileName);
                 break;
         }

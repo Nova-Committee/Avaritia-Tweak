@@ -25,13 +25,6 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
 
     public RecipeGeneratorMenu(int id, Inventory playerInventory, @NotNull BlockPos blockPos) {
         super(ModReg.recipe_generator_menu.get(), id, playerInventory, blockPos);
-        // 添加9x9输入槽位 (0-80)
-        for (int row = 0; row < 9; ++row) {
-            for (int col = 0; col < 9; ++col) {
-                // 在GUI中的位置: 8 + col*18, 18 + row*18
-                this.addSlot(new Slot(getTileEntity().containers, row * 9 + col, 8 + col * 18, 18 + row * 18));
-            }
-        }
 
         // 添加输出槽位 (81)，放在GUI右侧
         this.addSlot(new Slot(getTileEntity().containers, 81, 202, 89));
@@ -68,10 +61,11 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
             case AVARITIA_END_CRAFTING ->  setup7_7CraftingSlots();
             case AVARITIA_EXTREME_CRAFTING ->  setup9_9CraftingSlots();
             case AVARITIA_EXTREME_SMITHING ->  setupAvaritiaSmithingSlots();
+            case AVARITIA_COMPRESSOR ->  setupAvaritiaCompressorSlots();
         }
 
         // 添加输出槽位 (固定位置)
-        this.addSlot(new Slot(getTileEntity().containers, 81, 202, 89));
+        this.addSlot(new Slot(getTileEntity().containers, 81, 202, 18 + 4 * 18));
         availableSlots.add(81);
     }
 
@@ -83,8 +77,8 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 3; col++) {
                 int slotIndex = (startRow + row) * 9 + (startCol + col);
-                int x = 8 + col * 18;
-                int y = 18 + row * 18;
+                int x = 8 + 3 * 18  + col * 18;
+                int y = 18 + 3 * 18  + row * 18;
                 this.addSlot(new Slot(getTileEntity().containers, slotIndex, x, y));
                 availableSlots.add(slotIndex);
             }
@@ -99,8 +93,8 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
         for (int row = 0; row < 5; row++) {
             for (int col = 0; col < 5; col++) {
                 int slotIndex = (startRow + row) * 9 + (startCol + col);
-                int x = 8 + col * 18;
-                int y = 18 + row * 18;
+                int x = 8 + 2 * 18  + col * 18;
+                int y = 18 + 2 * 18  + row * 18;
                 this.addSlot(new Slot(getTileEntity().containers, slotIndex, x, y));
                 availableSlots.add(slotIndex);
             }
@@ -115,8 +109,8 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
         for (int row = 0; row < 7; row++) {
             for (int col = 0; col < 7; col++) {
                 int slotIndex = (startRow + row) * 9 + (startCol + col);
-                int x = 8 + col * 18;
-                int y = 18 + row * 18;
+                int x =  8 + 18 + col * 18;
+                int y = 18 + 18 + row * 18;
                 this.addSlot(new Slot(getTileEntity().containers, slotIndex, x, y));
                 availableSlots.add(slotIndex);
             }
@@ -158,6 +152,12 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
         availableSlots.add(40);
         availableSlots.add(41);
         availableSlots.add(49);
+    }
+
+    private void setupAvaritiaCompressorSlots() {
+        // 压缩机槽位 (40)
+        this.addSlot(new Slot(getTileEntity().containers, 40, 8 + 4 * 18, 18 + 4 * 18)); // 基础物品
+        availableSlots.add(40);
     }
 
     private void setupVanillaFurnaceSlots() {
