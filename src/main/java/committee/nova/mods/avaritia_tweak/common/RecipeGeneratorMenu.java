@@ -1,8 +1,11 @@
 package committee.nova.mods.avaritia_tweak.common;
 
 import committee.nova.mods.avaritia.api.common.menu.BaseTileMenu;
+import committee.nova.mods.avaritia_tweak.client.script.OutType;
 import committee.nova.mods.avaritia_tweak.client.script.RecipeTypes;
 import committee.nova.mods.avaritia_tweak.init.ModReg;
+import committee.nova.mods.avaritia_tweak.util.CrtUtils;
+import committee.nova.mods.avaritia_tweak.util.KubeJsUtils;
 import lombok.Getter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -11,23 +14,28 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * @author: cnlimiter
  */
 public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
-    @Getter private RecipeTypes category = RecipeTypes.VANILLA_CRAFTING;
+    @Getter private RecipeTypes category = RecipeTypes.AVARITIA_EXTREME_CRAFTING;
     @Getter private List<Integer> availableSlots = new ArrayList<>();
+    @Getter private final Map<Integer, Slot> slotMap = new HashMap<>();
 
     public RecipeGeneratorMenu(int id, Inventory playerInventory, @NotNull BlockPos blockPos) {
         super(ModReg.recipe_generator_menu.get(), id, playerInventory, blockPos);
-
-        // 添加输出槽位 (81)，放在GUI右侧
-        this.addSlot(new Slot(getTileEntity().containers, 81, 202, 89));
+        for (int row = 0; row < 9; row++) {
+            for (int col = 0; col < 9; col++) {
+                int slotIndex = row * 9 + col;
+                int x = 8 + col * 18;
+                int y = 18 + row * 18;
+                this.addCraftingSlot(slotIndex, x, y);
+            }
+        }
+        this.addCraftingSlot(81, 202, 18 + 4 * 18);
+        createInventorySlots(playerInventory, 31, 110);
     }
 
     public static RecipeGeneratorMenu fromNetwork(int containerId, Inventory inventory, FriendlyByteBuf buf) {
@@ -39,24 +47,33 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
             this.category = newCategory;
 
             // 清除现有槽位
-            this.slots.clear();
-            this.lastSlots.clear();
-            this.remoteSlots.clear();
-
+            clearAll();
             // 重新设置槽位
             setupSlotsForCategory(newCategory);
+
+            this.slots.forEach(slot -> {
+                System.out.println("slot.index: " + slot.index);
+            });
+
         }
     }
 
+    public void clearAll() {
+            // 清除现有槽位
+            this.slots.clear();
+            this.lastSlots.clear();
+            this.remoteSlots.clear();
+            this.availableSlots.clear();
+            this.slotMap.clear();
+    }
+
+
     private void setupSlotsForCategory(RecipeTypes category) {
-        availableSlots.clear();
 
         switch (category) {
-            case VANILLA_CRAFTING ->  setup3_3CraftingSlots();
+            case VANILLA_CRAFTING, AVARITIA_SCULK_CRAFTING ->  setup3_3CraftingSlots();
             case VANILLA_SMITHING ->  setupVanillaSmithingSlots();
-            case VANILLA_FURNACE ->  setupVanillaFurnaceSlots();
-            case VANILLA_STONECUTTING ->  setupVanillaFurnaceSlots();
-            case AVARITIA_SCULK_CRAFTING ->  setup3_3CraftingSlots();
+            case VANILLA_FURNACE, VANILLA_STONECUTTING ->  setupVanillaFurnaceSlots();
             case AVARITIA_NETHER_CRAFTING ->  setup5_5CraftingSlots();
             case AVARITIA_END_CRAFTING ->  setup7_7CraftingSlots();
             case AVARITIA_EXTREME_CRAFTING ->  setup9_9CraftingSlots();
@@ -65,8 +82,31 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
         }
 
         // 添加输出槽位 (固定位置)
-        this.addSlot(new Slot(getTileEntity().containers, 81, 202, 18 + 4 * 18));
-        availableSlots.add(81);
+        this.addCraftingSlot(81, 202, 18 + 4 * 18);
+    }
+
+    // 改进槽位添加方法
+    private void addCraftingSlot(int slotIndex, int x, int y) {
+        Slot slot = new Slot(getTileEntity().containers, slotIndex, x, y);
+        this.addSlot(slot);
+        slotMap.put(slotIndex, slot);
+        availableSlots.add(slotIndex);
+    }
+
+    // 提供安全的槽位获取方法
+    public Slot getSafeSlot(int slotIndex) {
+        return slotMap.get(slotIndex);
+    }
+
+
+    // 获取指定槽位的物品
+    public ItemStack getSlotItem(int slotIndex) {
+        return getSafeSlot(slotIndex).getItem();
+    }
+
+    // 改进槽位检查方法
+    public boolean isSlotValid(int slotIndex) {
+        return slotMap.containsKey(slotIndex) && availableSlots.contains(slotIndex);
     }
 
     private void setup3_3CraftingSlots() {
@@ -79,8 +119,7 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
                 int slotIndex = (startRow + row) * 9 + (startCol + col);
                 int x = 8 + 3 * 18  + col * 18;
                 int y = 18 + 3 * 18  + row * 18;
-                this.addSlot(new Slot(getTileEntity().containers, slotIndex, x, y));
-                availableSlots.add(slotIndex);
+                this.addCraftingSlot(slotIndex, x, y);
             }
         }
     }
@@ -95,8 +134,7 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
                 int slotIndex = (startRow + row) * 9 + (startCol + col);
                 int x = 8 + 2 * 18  + col * 18;
                 int y = 18 + 2 * 18  + row * 18;
-                this.addSlot(new Slot(getTileEntity().containers, slotIndex, x, y));
-                availableSlots.add(slotIndex);
+                this.addCraftingSlot(slotIndex, x, y);
             }
         }
     }
@@ -111,8 +149,7 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
                 int slotIndex = (startRow + row) * 9 + (startCol + col);
                 int x =  8 + 18 + col * 18;
                 int y = 18 + 18 + row * 18;
-                this.addSlot(new Slot(getTileEntity().containers, slotIndex, x, y));
-                availableSlots.add(slotIndex);
+                this.addCraftingSlot(slotIndex, x, y);
             }
         }
     }
@@ -124,55 +161,37 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
                 int slotIndex = row * 9 + col;
                 int x = 8 + col * 18;
                 int y = 18 + row * 18;
-                this.addSlot(new Slot(getTileEntity().containers, slotIndex, x, y));
-                availableSlots.add(slotIndex);
+                this.addCraftingSlot(slotIndex, x, y);
             }
         }
     }
 
     private void setupVanillaSmithingSlots() {
         // 锻造台槽位 (39, 40, 41)
-        this.addSlot(new Slot(getTileEntity().containers, 39, 8 + 3 * 18, 18 + 4 * 18)); // 模板
-        this.addSlot(new Slot(getTileEntity().containers, 40, 8 + 4 * 18, 18 + 4 * 18)); // 基础物品
-        this.addSlot(new Slot(getTileEntity().containers, 41, 8 + 5 * 18, 18 + 4 * 18)); // 添加物品
-        availableSlots.add(39);
-        availableSlots.add(40);
-        availableSlots.add(41);
+        this.addCraftingSlot(39, 8 + 3 * 18, 18 + 4 * 18);
+        this.addCraftingSlot(40, 8 + 4 * 18, 18 + 4 * 18);
+        this.addCraftingSlot(41, 8 + 5 * 18, 18 + 4 * 18);
     }
 
     private void setupAvaritiaSmithingSlots() {
         // 锻造台槽位 (31, 39, 40, 41, 49)
-        this.addSlot(new Slot(getTileEntity().containers, 31, 8 + 4 * 18, 18 + 3 * 18)); // 添加物品1
-        this.addSlot(new Slot(getTileEntity().containers, 39, 8 + 3 * 18, 18 + 4 * 18)); // 模板
-        this.addSlot(new Slot(getTileEntity().containers, 40, 8 + 4 * 18, 18 + 4 * 18)); // 基础物品
-        this.addSlot(new Slot(getTileEntity().containers, 41, 8 + 5 * 18, 18 + 4 * 18)); // 添加物品2
-        this.addSlot(new Slot(getTileEntity().containers, 49, 8 + 4 * 18, 18 + 5 * 18)); // 添加物品3
-        availableSlots.add(31);
-        availableSlots.add(39);
-        availableSlots.add(40);
-        availableSlots.add(41);
-        availableSlots.add(49);
+        this.addCraftingSlot(31, 8 + 4 * 18, 18 + 3 * 18);
+        this.addCraftingSlot(39, 8 + 3 * 18, 18 + 4 * 18);
+        this.addCraftingSlot(40, 8 + 4 * 18, 18 + 4 * 18);
+        this.addCraftingSlot(41, 8 + 5 * 18, 18 + 4 * 18);
+        this.addCraftingSlot(49, 8 + 4 * 18, 18 + 5 * 18);
     }
 
     private void setupAvaritiaCompressorSlots() {
         // 压缩机槽位 (40)
-        this.addSlot(new Slot(getTileEntity().containers, 40, 8 + 4 * 18, 18 + 4 * 18)); // 基础物品
-        availableSlots.add(40);
+        this.addCraftingSlot(40, 8 + 4 * 18, 18 + 4 * 18);
     }
 
     private void setupVanillaFurnaceSlots() {
         // 熔炉槽位 (40)
-        this.addSlot(new Slot(getTileEntity().containers, 40, 8 + 4 * 18, 18 + 4 * 18));
-        availableSlots.add(40);
+        this.addCraftingSlot(40, 8 + 4 * 18, 18 + 4 * 18);
     }
 
-    // 获取指定槽位的物品
-    public ItemStack getSlotItem(int slotIndex) {
-        if (slotIndex >= 0 && slotIndex < this.slots.size()) {
-            return this.slots.get(slotIndex).getItem();
-        }
-        return ItemStack.EMPTY;
-    }
 
 
     // 根据等级获取可用槽位数量
@@ -186,36 +205,14 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
         };
     }
 
-    // 获取指定等级的可用槽位集合（从中心向外扩散）
-    public Set<Integer> getAvailableSlotsSetForTier(int tier) {
-        Set<Integer> availableSlots = new HashSet<>();
-
-        // 根据等级确定网格大小
-        int gridSize = switch (tier) {
-            case 1 -> 3;   // 3x3
-            case 2 -> 5;   // 5x5
-            case 3 -> 7;   // 7x7
-            case 4 -> 9;   // 9x9
-            default -> 9;
-        };
-
-        // 计算起始位置（从中心向外扩散）
-        int startRow = (9 - gridSize) / 2;
-        int startCol = (9 - gridSize) / 2;
-
-        // 添加可用槽位
-        for (int row = 0; row < gridSize; row++) {
-            for (int col = 0; col < gridSize; col++) {
-                int slotIndex = (startRow + row) * 9 + (startCol + col);
-                if (slotIndex < 81) {
-                    availableSlots.add(slotIndex);
-                }
+    private void doGenerateScript(String fileName, OutType scriptType) {
+        switch (scriptType) {
+            case JS: {
+                KubeJsUtils.exportTableJS(this, true, 4, true, fileName);
+            }
+            case ZS: {
+                CrtUtils.exportTableZS(this, true, 4, true, fileName);
             }
         }
-
-        return availableSlots;
     }
-
-
-
 }

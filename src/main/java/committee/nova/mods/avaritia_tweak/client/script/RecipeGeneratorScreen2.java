@@ -21,6 +21,7 @@ import net.minecraft.core.NonNullList;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.*;
@@ -33,53 +34,27 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
     public static final ResourceLocation WIDGETS = new ResourceLocation(AvaritiaTweak.MOD_ID, "textures/gui/recipe_generator_craft.png");
 
 
-    // 当前选中的选项卡
-    private RecipeTypes currentTab = RecipeTypes.VANILLA_CRAFTING;
     // 模式控制
-    private Mode selectMode = Mode.SELECT; // 默认为选择模式
+    private boolean brushMode = false;
     private ItemStack brushItem = ItemStack.EMPTY;
     // 脚本生成设置
-    private Out scriptType = Out.JS; // 1=KubeJS, 2=CRT
+    private OutType scriptType = OutType.JS; // 1=KubeJS, 2=CRT
 
     // UI组件
-    private CycleTextureButton<Mode> modeToggleButton;
+    private Button selectButton;
     private Button brushButton;
-    private CycleTextureButton<Out> scriptTypeButton;
+    private CycleTextureButton<OutType> scriptTypeButton;
     private Button generateButton;
 
-    @Getter
-    enum Mode {
-        SELECT(0),
-        BRUSH(1);
-        private final int index;
-        private final Component name;
-        private Mode(int index) {
-            this.index = index;
-            this.name = Component.translatable(this.name() + "_mode");
-        }
-    }
-
-    @Getter
-    enum Out {
-        JS(0),
-        ZS(1);
-        private final int index;
-        private final Component name;
-        private Out(int index) {
-            this.index = index;
-            this.name = Component.translatable(this.name() + "_out");
-        }
-    }
-
-
     public RecipeGeneratorScreen2(RecipeGeneratorMenu container, Inventory inventory, Component title) {
-        super(container, inventory, title, BACKGROUND, 234, 278, 512, 512);
+        super(container, inventory, title);
     }
 
     @Override
     protected void subInit() {
         super.subInit();
-
+        this.leftPos = (this.width - 234) / 2;
+        this.topPos = (this.height - 278) / 2;
         // 初始化选项卡按钮
         initTabButtons(this.leftPos, this.topPos);
 
@@ -105,46 +80,33 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
     }
 
     private void initControlButtons(int centerX, int centerY) {
-        // 模式切换按钮
-        modeToggleButton = this.addRenderableWidget(
-                CycleTextureButton.builder(Mode::getName)
-                        .withValues(Mode.values())
-                        .withInitialValue(Mode.SELECT)
-                        .bounds(centerX + 203, centerY + 3, 22, 24)
-                        .texStart(0, 304)
-                        .xDiffTex(23)
-                        .textureSize(512, 512)
-                        .create(BACKGROUND,
-                                Component.literal(""), (button, mode) -> {
-                                    selectMode = mode;
-                                })
-        );
-
-
-        // 画笔物品/配方选择按钮
+        // 画笔物品按钮
         brushButton = this.addRenderableWidget(
-                TextureButton.builder(Component.literal(""), BACKGROUND, button -> {
-                            switch (selectMode) {
-                                case SELECT -> openRecipeSelectScreen();
-                                case BRUSH -> openBrushItemSelector();
-                            }
-                        })
-                        .bounds(centerX + 203, centerY + 26, 22, 24)
-                        .texStart(0, 279)
-                        .xDiffTex(23)
-                        .textureSize(512, 512)
-                        .build()
+                new BrushButton(centerX + 186, centerY + 3, button -> {
+                    if (!this.brushMode) this.brushMode = true;
+                    openBrushItemSelector();
+                })
         );
 
+        selectButton = this.addRenderableWidget(
+                new SelectButton(centerX + 210, centerY + 3, button -> {
+                    if (this.brushMode) {
+                        this.brushMode = false;
+                        this.brushItem = ItemStack.EMPTY;
+                    }
+                    openRecipeSelectScreen();
+                })
+        );
 
         // 脚本类型选择按钮
         scriptTypeButton =  this.addRenderableWidget(
-                CycleTextureButton.builder(Out::getName)
-                        .withValues(Out.values())
-                        .withInitialValue(Out.JS)
-                        .bounds(centerX + 203, centerY + 155, 22, 24)
+                CycleTextureButton.builder(OutType::getName)
+                        .withValues(OutType.values())
+                        .withInitialValue(OutType.JS)
+                        .bounds(centerX + 186, centerY + 155, 22, 24)
                         .texStart(0, 404)
                         .xDiffTex(23)
+                        .yDiffTex(25)
                         .textureSize(512, 512)
                         .create(BACKGROUND,
                                 Component.literal(""), (button, out) -> {
@@ -153,25 +115,15 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
         );
 
         // 生成按钮
-        generateButton = this.addRenderableWidget(TextureButton.builder(Component.literal(""), BACKGROUND, button -> {
-                            generateScript();
-
-                        })
-                        .bounds(centerX + 226, centerY + 135, 22, 24)
-                        .texStart(0, 354)
-                        .xDiffTex(0)
-                        .textureSize(512, 512)
-                        .build()
+        generateButton = this.addRenderableWidget(
+                new GenButton(centerX + 210, centerY + 155, button -> generateScript())
         );
 
     }
 
     private void switchToTab(RecipeTypes tab) {
-        if (this.currentTab != tab) {
-            this.currentTab = tab;
             // 通知菜单切换类别
             this.menu.switchCategory(tab);
-        }
     }
 
 
@@ -186,7 +138,7 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
 
     private void renderSlots(GuiGraphics graphics) {
         int labelY = 10;
-        switch (currentTab) {
+        switch (this.menu.getCategory()) {
             case AVARITIA_EXTREME_CRAFTING -> {
                 GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4, this.topPos + labelY + 4, 0, 0, 168, 169, 512, 512);
             }
@@ -200,7 +152,7 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
                 GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 3 * 18, this.topPos + labelY + 4 + 3 * 18, 0, 402, 60, 61, 512, 512);
             }
             case AVARITIA_EXTREME_SMITHING -> {
-                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 3 * 18, this.topPos + labelY + 4 + 4 * 18, 172, 14, 60, 62, 512, 512);
+                GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 3 * 18, this.topPos + labelY + 4 + 3 * 18, 172, 14, 60, 62, 512, 512);
             }
             case AVARITIA_COMPRESSOR -> {
                 GuiUtils.blit(graphics, WIDGETS, this.leftPos + 4 + 4 * 18, this.topPos + labelY + 4 + 4 * 18, 172, 104, 46, 26, 512, 512);
@@ -219,81 +171,129 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
             }
         }
         GuiUtils.blit(graphics, WIDGETS, this.leftPos + 198, this.topPos + 14 + 4 * 18, 266, 14, 24, 26, 512, 512);//输出槽
-        GuiUtils.blit(graphics, WIDGETS, this.leftPos, this.topPos, 171, 0, 170, 13, 512, 512);//标题
-
+        GuiUtils.blit(graphics, WIDGETS, this.leftPos + 3, this.topPos, 171, 0, 170, 13, 512, 512);//标题
     }
 
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         guiGraphics.drawString(this.font, this.title, this.titleLabelX, this.titleLabelY - 3, 4210752, false);
+        guiGraphics.drawString(this.font, this.playerInventoryTitle, this.inventoryLabelX + 30, this.inventoryLabelY + 112, 4210752, false);
     }
 
     @Override
-    protected void renderBgs(GuiGraphics guiGraphics, float partialTick, int mouseX, int mouseY) {
-        super.renderBgs(guiGraphics, partialTick, mouseX, mouseY);
-        this.renderSlots(guiGraphics);
+    protected void renderBgs(GuiGraphics pGuiGraphics, float pPartialTick, int pX, int pY) {
+        pGuiGraphics.blit(BACKGROUND, this.leftPos, this.topPos - 2, 0, 0, 234, 278, 512, 512);
+        this.renderSlots(pGuiGraphics);
     }
 
+    @Override
+    protected void renderFg(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {
+        super.renderFg(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
+        if (brushMode) GuiUtils.blit(pGuiGraphics, BACKGROUND, this.leftPos + 186, this.topPos + 3, 46, 304, 22, 24, 512, 512);
+        if(!brushItem.isEmpty()) GuiUtils.renderItem(pGuiGraphics, this.font, brushItem, this.leftPos + 189, this.topPos + 6, false);
+    }
+
+    @Override
+    public void onClose() {
+        super.onClose();
+        this.menu.clearAll();
+    }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) { // 左键点击
             // 检查输入槽位区域 (9x9网格)
-            int gridX = (int) ((mouseX - (this.leftPos + 8)) / 18);
-            int gridY = (int) ((mouseY - (this.topPos + 18)) / 18);
+            int relativeMouseX = (int) (mouseX - (this.leftPos + 8));
+            int relativeMouseY = (int) (mouseY - (this.topPos + 18));
 
-            if (gridX >= 0 && gridX < 9 && gridY >= 0 && gridY < 9) {
-                // 点击了输入槽位
-                int slotIndex = gridY * 9 + gridX;
-                if (isSlotAvailable(slotIndex)) {
-                    if (selectMode == Mode.SELECT) {
-                        // 选择模式：打开物品选择界面
-                        openItemSelectScreen(slotIndex);
-                    } else {
-                        // 画刷模式：用选定的物品填充槽位
-                        if (!brushItem.isEmpty()) {
-                            this.menu.getSlot(slotIndex).set(brushItem.copy());
+            if (relativeMouseX >= 0 && relativeMouseY >= 0) {
+                int gridX = relativeMouseX / 18;
+                int gridY = relativeMouseY / 18;
+
+                if (gridX < 9 && gridY < 9) {
+                    // 点击了输入槽位
+                    int slotIndex = gridY * 9 + gridX;
+                    if (isSlotAvailable(slotIndex)) {
+                        if (brushMode) {
+                            // 画刷模式：用选定的物品填充槽位
+                            Slot slot = this.menu.getSafeSlot(slotIndex);
+                            if (slot != null && !brushItem.isEmpty()) {
+                                slot.set(brushItem.copy());
+                            }
+                        } else {
+                            // 选择模式：打开物品选择界面
+                            openItemSelectScreen(slotIndex);
                         }
+                        return true;
                     }
-                    return true;
                 }
             }
 
             // 检查输出槽位
-            int outputX = (int) ((mouseX - (this.leftPos + 202)) / 18);
-            int outputY = (int) ((mouseY - (this.topPos + 89)) / 18);
+            int relativeOutputX = (int) (mouseX - (this.leftPos + 202));
+            int relativeOutputY = (int) (mouseY - (this.topPos + 89));
 
-            if (outputX == 0 && outputY == 0) {
-                // 点击了输出槽位
-                openItemSelectScreen(81);
-                return true;
+            if (relativeOutputX >= 0 && relativeOutputY >= 0) {
+                int outputX = relativeOutputX / 18;
+                int outputY = relativeOutputY / 18;
+
+                if (outputX == 0 && outputY == 0) {
+                    // 点击了输出槽位
+                    openItemSelectScreen(81);
+                    return true;
+                }
             }
         } else if (button == 1) { // 右键点击清除
+            System.out.println(mouseX + " " + mouseY);
             // 检查输入槽位区域 (9x9网格)
-            int gridX = (int) ((mouseX - (this.leftPos + 8)) / 18);
-            int gridY = (int) ((mouseY - (this.topPos + 18)) / 18);
+            int relativeMouseX = (int) (mouseX - (this.leftPos + 8));
+            int relativeMouseY = (int) (mouseY - (this.topPos + 18));
 
-            if (gridX >= 0 && gridX < 9 && gridY >= 0 && gridY < 9) {
-                // 点击了输入槽位
-                int slotIndex = gridY * 9 + gridX;
-                if (isSlotAvailable(slotIndex)) {
-                    if (!this.menu.getSlotItem(slotIndex).isEmpty()) {
-                        this.menu.getSlot(slotIndex).set(ItemStack.EMPTY);
+            if (relativeMouseX >= 0 && relativeMouseY >= 0) {
+                int gridX = relativeMouseX / 18;
+                int gridY = relativeMouseY / 18;
+
+                if (gridX < 9 && gridY < 9) {
+                    // 点击了输入槽位
+                    int slotIndex = gridY * 9 + gridX;
+                    if (isSlotAvailable(slotIndex)) {
+                        Slot slot = this.menu.getSafeSlot(slotIndex);
+                        if (slot != null && !slot.getItem().isEmpty()) {
+                            slot.set(ItemStack.EMPTY);
+                        }
+                        return true;
+                    }
+                }
+            }
+
+            // 检查输出槽位
+            int relativeOutputX = (int) (mouseX - (this.leftPos + 202));
+            int relativeOutputY = (int) (mouseY - (this.topPos + 89));
+
+            if (relativeOutputX >= 0 && relativeOutputY >= 0) {
+                int outputX = relativeOutputX / 18;
+                int outputY = relativeOutputY / 18;
+
+                if (outputX == 0 && outputY == 0) {
+                    Slot outputSlot = this.menu.getSafeSlot(81);
+                    if (outputSlot != null && !outputSlot.getItem().isEmpty()) {
+                        outputSlot.set(ItemStack.EMPTY);
                     }
                     return true;
                 }
             }
 
-            // 检查输出槽位
-            int outputX = (int) ((mouseX - (this.leftPos + 202)) / 18);
-            int outputY = (int) ((mouseY - (this.topPos + 89)) / 18);
+            // 检查画刷
+            int relativeBrushX = (int) (mouseX - (this.leftPos + 186));
+            int relativeBrushY = (int) (mouseY - (this.topPos + 3));
 
-            if (outputX == 0 && outputY == 0) {
-                if (!this.menu.getSlotItem(81).isEmpty()) {
-                    this.menu.getSlot(81).set(ItemStack.EMPTY);
-                }
+            if (relativeBrushX >= 0 && relativeBrushY >= 0
+                && relativeBrushX < 22 && relativeBrushY < 24
+            ) {
+                this.brushItem = ItemStack.EMPTY;
                 return true;
             }
+
         }
 
         return super.mouseClicked(mouseX, mouseY, button);
@@ -301,19 +301,26 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
 
 
 
+    // 简化槽位可用性检查
     private boolean isSlotAvailable(int slotIndex) {
-        return this.menu.getAvailableSlots().contains(slotIndex);
+        return this.menu.isSlotValid(slotIndex);
     }
 
+    // 改进打开物品选择界面的方法
     private void openItemSelectScreen(int slotIndex) {
-        ItemStack defaultItem = this.menu.getSlotItem(slotIndex);
+        Slot slot = this.menu.getSafeSlot(slotIndex);
+        if (slot == null) {
+            return;
+        }
+
+        ItemStack defaultItem = slot.getItem();
         if (defaultItem.isEmpty()) {
             defaultItem = new ItemStack(Items.AIR);
         }
 
         this.minecraft.setScreen(new ItemSelectScreen(
                 this,
-                (itemStack) -> this.menu.getSlot(slotIndex).set(itemStack.copy()),
+                (itemStack) -> slot.set(itemStack.copy()),
                 defaultItem
         ));
     }
@@ -355,10 +362,8 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
         ItemStack result = recipe.getResultItem(this.minecraft.level.registryAccess());
         if (!result.isEmpty()) {
             // 设置输出槽
-            this.menu.getSlot(81).set(result.copy());
+            this.menu.getSafeSlot(81).set(result.copy());
         }
-
-
     }
 
     // 填充无尽有序工作台配方
@@ -389,9 +394,9 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
     private void fillExtremeSmithingRecipe(ExtremeSmithingRecipe recipe) {
         this.menu.switchCategory(RecipeTypes.VANILLA_SMITHING);
         try {
-            this.menu.getSlot(39).set(recipe.template.getItems()[0]); // 模板槽位
-            this.menu.getSlot(40).set(recipe.base.getItems()[0]);     // 基础物品槽位
-            this.menu.getSlot(41).set(recipe.additions.getItems()[0]); // 添加物品槽位
+            this.menu.getSafeSlot(39).set(recipe.template.getItems()[0]); // 模板槽位
+            this.menu.getSafeSlot(40).set(recipe.base.getItems()[0]);     // 基础物品槽位
+            this.menu.getSafeSlot(41).set(recipe.additions.getItems()[0]); // 添加物品槽位
         } catch (Exception e) {
             // 忽略异常
         }
@@ -426,7 +431,7 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
                             if (items.length > 0) {
                                 int slotIndex = (startRow + y) * 9 + (startCol + x);
                                 if (this.isSlotAvailable(slotIndex)) {
-                                    this.menu.getSlot(slotIndex).set(items[0].copy());
+                                    this.menu.getSafeSlot(slotIndex).set(items[0].copy());
                                 }
                             }
                         }
@@ -449,7 +454,7 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
                     if (items.length > 0 && slotIndex < this.menu.getAvailableSlots().size() - 1) { // -1 for output slot
                         int actualSlot = this.menu.getAvailableSlots().get(slotIndex);
                         if (actualSlot != 81) { // Skip output slot
-                            this.menu.getSlot(actualSlot).set(items[0].copy());
+                            this.menu.getSafeSlot(actualSlot).set(items[0].copy());
                             slotIndex++;
                         }
                     }
@@ -470,7 +475,7 @@ public class RecipeGeneratorScreen2 extends BaseContainerScreen<RecipeGeneratorM
                     if (!this.menu.getAvailableSlots().isEmpty()) {
                         int slotIndex = this.menu.getAvailableSlots().get(0);
                         if (slotIndex != 81) { // Skip output slot
-                            this.menu.getSlot(slotIndex).set(items[0].copy());
+                            this.menu.getSafeSlot(slotIndex).set(items[0].copy());
                         }
                     }
                 }

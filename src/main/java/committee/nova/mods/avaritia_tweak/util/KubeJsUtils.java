@@ -244,7 +244,7 @@ public class KubeJsUtils {
             if (!existingContent.contains("ServerEvents.recipes")) {
                 existingContent = """
                         ServerEvents.recipes(event => {
-                                const { avaritia } = event.recipes;
+                            const { avaritia } = event.recipes;
                         });
                         """;
             }
