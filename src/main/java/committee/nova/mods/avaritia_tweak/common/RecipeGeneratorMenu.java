@@ -7,6 +7,7 @@ import committee.nova.mods.avaritia_tweak.init.ModReg;
 import committee.nova.mods.avaritia_tweak.util.CrtUtils;
 import committee.nova.mods.avaritia_tweak.util.KubeJsUtils;
 import lombok.Getter;
+import lombok.Setter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
@@ -17,9 +18,11 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 
 /**
- * @author: cnlimiter
+ * @author cnlimiter
  */
 public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
+    @Setter @Getter private boolean shaped = true;//
+    @Setter @Getter private boolean brushMode = false;// 模式控制
     @Getter private RecipeTypes category = RecipeTypes.AVARITIA_EXTREME_CRAFTING;
     @Getter private List<Integer> availableSlots = new ArrayList<>();
     @Getter private final Map<Integer, Slot> slotMap = new HashMap<>();
@@ -34,7 +37,7 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
                 this.addCraftingSlot(slotIndex, x, y);
             }
         }
-        this.addCraftingSlot(81, 202, 18 + 4 * 18);
+        this.addCraftingSlot(81, 208, 18 + 4 * 18);
         createInventorySlots(playerInventory, 31, 110);
     }
 
@@ -82,7 +85,7 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
         }
 
         // 添加输出槽位 (固定位置)
-        this.addCraftingSlot(81, 202, 18 + 4 * 18);
+        this.addCraftingSlot(81, 208, 18 + 4 * 18);
     }
 
     // 改进槽位添加方法
@@ -205,13 +208,17 @@ public class RecipeGeneratorMenu extends BaseTileMenu<RecipeGeneratorTile> {
         };
     }
 
-    private void doGenerateScript(String fileName, OutType scriptType) {
+    public void doGenerateScript(String fileName, OutType scriptType) {
         switch (scriptType) {
             case JS: {
-                KubeJsUtils.exportTableJS(this, true, 4, true, fileName);
+                if (this.getCategory().isCrafting()) {
+                    KubeJsUtils.exportTableJS(this, this.shaped, Math.max(this.getCategory().getCode() - 10, 1), true, fileName);
+                }
             }
             case ZS: {
-                CrtUtils.exportTableZS(this, true, 4, true, fileName);
+                if (this.getCategory().isCrafting()) {
+                    CrtUtils.exportTableZS(this, this.shaped, Math.max(this.getCategory().getCode() - 10, 1), true, fileName);
+                }
             }
         }
     }

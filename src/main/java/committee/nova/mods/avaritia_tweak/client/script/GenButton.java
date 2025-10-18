@@ -8,7 +8,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import org.jetbrains.annotations.NotNull;
 
-import static committee.nova.mods.avaritia_tweak.client.script.RecipeGeneratorScreen2.BACKGROUND;
+import static committee.nova.mods.avaritia_tweak.client.script.RecipeGeneratorScreen.BACKGROUND;
 
 /**
  * @author cnlimiter
