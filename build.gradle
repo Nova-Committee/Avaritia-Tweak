@@ -95,10 +95,11 @@ repositories {
     maven { url = "https://maven.saps.dev/minecraft" }
     maven { url = 'https://www.jitpack.io' }
     maven { url = "https://maven.terraformersmc.com/" }
+    maven { url = 'https://maven.nova-committee.cn/releases' }
 }
 
 dependencies {
-    modImplementation("committee.nova.mods:Re-Avaritia-forged:1.20.1-1.3.9.3-alpha4")
+    modImplementation("committee.nova.mods:avaritia-forge:1.20.1-1.3.9.6-release")
     // compile against provided APIs
     modImplementation "com.blamejared.crafttweaker:CraftTweaker-forge-${mc_version}:${crafttweaker_version}"
 
@@ -322,7 +323,7 @@ publishing {
     publications {
         maven(MavenPublication) {
             groupId = project.group
-            artifactId = project.base.archivesName
+            artifactId = project.mod_id + "-" + project.mod_platform
             version = project.version
 
             artifact jar
@@ -337,8 +338,8 @@ publishing {
             url = file("build/repo").toURI()
         }
         maven {
-            name 'S3'
-            url = 'https://maven.nova-committee.cn/s3'
+            name 'Releases'
+            url = 'https://maven.nova-committee.cn/releases'
 
             credentials {
                 username System.getenv('MAVEN_USERNAME')
