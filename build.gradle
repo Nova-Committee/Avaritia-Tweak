@@ -6,7 +6,7 @@ plugins {
 version = mc_version + "-" + mod_version + "-" + mod_version_tag
 group = mod_group_id
 base {
-    archivesName = mod_name
+    archivesName = mod_name + "-" + mod_platform
 }
 
 compileJava.options.encoding = 'UTF-8'
