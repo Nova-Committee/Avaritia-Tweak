@@ -99,7 +99,7 @@ public final class ConflictScreen extends Screen {
         int contentX = layout.left + 10;
         int contentWidth = layout.width - 20;
         graphics.fill(contentX - 2, layout.top + 34, contentX + contentWidth + 2,
-                layout.top + 76, 0xff35252a);
+                layout.top + 76, EditorTheme.errorSurface());
         graphics.fill(contentX - 2, layout.top + 34, contentX + 1,
                 layout.top + 76, EditorTheme.ERROR);
         graphics.drawWordWrap(this.font,

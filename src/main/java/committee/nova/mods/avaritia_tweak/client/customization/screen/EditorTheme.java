@@ -4,55 +4,115 @@ import committee.nova.mods.avaritia_tweak.customization.diff.ChangeType;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
 final class EditorTheme {
-    static final int BACKDROP = 0xff0b0c11;
-    static final int WINDOW = 0xff202228;
-    static final int PANEL = 0xff292c33;
-    static final int PANEL_DARK = 0xff17191e;
-    static final int PANEL_RAISED = 0xff343840;
-    static final int BORDER = 0xff5c626d;
-    static final int BORDER_DARK = 0xff08090c;
-    static final int TEXT = 0xffe4e5e9;
-    static final int TEXT_MUTED = 0xff9da3ae;
-    static final int TEXT_FAINT = 0xff737985;
-    static final int AVARITIA_RED = 0xffd9535b;
-    static final int AVARITIA_CYAN = 0xff62c7c7;
-    static final int AVARITIA_GOLD = 0xffe3bd62;
-    static final int SUCCESS = 0xff6ed39d;
-    static final int WARNING = 0xffffc76b;
-    static final int ERROR = 0xffff6b6b;
-    static final int MODIFIED = 0xffffc76b;
-    static final int ADDED = 0xff6ed39d;
-    static final int REMOVED = 0xffff6b6b;
-
     private static final int CODE_LINE_HEIGHT = 10;
+    private static final EditorThemePreferenceStore PREFERENCES = new EditorThemePreferenceStore(
+            FMLPaths.CONFIGDIR.get().resolve("avaritia_tweak/visual_editor/ui-theme.txt"));
+
+    static int BACKDROP;
+    static int WINDOW;
+    static int PANEL;
+    static int PANEL_DARK;
+    static int PANEL_RAISED;
+    static int BORDER;
+    static int BORDER_DARK;
+    static int TEXT;
+    static int TEXT_MUTED;
+    static int TEXT_FAINT;
+    static int AVARITIA_RED;
+    static int AVARITIA_CYAN;
+    static int AVARITIA_GOLD;
+    static int SUCCESS;
+    static int WARNING;
+    static int ERROR;
+    static int MODIFIED;
+    static int ADDED;
+    static int REMOVED;
+
+    private static int syntaxComment;
+    private static int syntaxProperty;
+    private static int syntaxString;
+    private static int syntaxKeyword;
+    private static EditorThemeStyle currentStyle;
+    private static Optional<String> startupWarning;
+
+    static {
+        EditorThemePreferenceStore.LoadResult loaded = PREFERENCES.load();
+        startupWarning = loaded.warning();
+        apply(loaded.style());
+    }
 
     private EditorTheme() {
     }
 
+    static EditorThemeStyle currentStyle() {
+        return currentStyle;
+    }
+
+    static Optional<String> startupWarning() {
+        return startupWarning;
+    }
+
+    static ThemeSwitchResult cycleTheme() {
+        EditorThemeStyle next = currentStyle.next();
+        apply(next);
+        Optional<String> warning = PREFERENCES.save(next);
+        startupWarning = warning;
+        return new ThemeSwitchResult(next, warning);
+    }
+
+    private static void apply(EditorThemeStyle style) {
+        EditorThemeStyle.Palette palette = style.palette();
+        currentStyle = style;
+        BACKDROP = palette.backdrop();
+        WINDOW = palette.window();
+        PANEL = palette.panel();
+        PANEL_DARK = palette.panelDark();
+        PANEL_RAISED = palette.panelRaised();
+        BORDER = palette.border();
+        BORDER_DARK = palette.borderDark();
+        TEXT = palette.text();
+        TEXT_MUTED = palette.textMuted();
+        TEXT_FAINT = palette.textFaint();
+        AVARITIA_RED = palette.structure();
+        AVARITIA_CYAN = palette.focus();
+        AVARITIA_GOLD = palette.heading();
+        SUCCESS = palette.success();
+        WARNING = palette.warning();
+        ERROR = palette.error();
+        MODIFIED = palette.warning();
+        ADDED = palette.success();
+        REMOVED = palette.error();
+        syntaxComment = palette.syntaxComment();
+        syntaxProperty = palette.syntaxProperty();
+        syntaxString = palette.syntaxString();
+        syntaxKeyword = palette.syntaxKeyword();
+    }
+
     static void renderBackdrop(GuiGraphics graphics, int width, int height) {
         graphics.fill(0, 0, width, height, BACKDROP);
-        graphics.fill(0, 0, width, Math.max(1, height / 2), 0xff11131a);
+        graphics.fill(0, 0, width, Math.max(1, height / 2), mix(BACKDROP, WINDOW, 28));
         for (int index = 0; index < 48; index++) {
             int x = Math.floorMod(index * 73 + 19, Math.max(1, width));
             int y = Math.floorMod(index * 41 + 7, Math.max(1, height));
-            int color = index % 5 == 0 ? 0x5577d6d6 : 0x334b5262;
+            int color = index % 5 == 0 ? withAlpha(AVARITIA_CYAN, 0x55) : withAlpha(BORDER, 0x33);
             graphics.fill(x, y, x + 1, y + 1, color);
         }
     }
 
     static void renderWindow(GuiGraphics graphics, int x, int y, int width, int height, int accent) {
-        graphics.fill(x + 3, y + 4, x + width + 3, y + height + 4, 0x99000000);
+        graphics.fill(x + 3, y + 4, x + width + 3, y + height + 4, withAlpha(BORDER_DARK, 0x99));
         graphics.fill(x, y, x + width, y + height, BORDER_DARK);
         graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, BORDER);
         graphics.fill(x + 2, y + 2, x + width - 2, y + height - 2, WINDOW);
         graphics.fill(x + 2, y + 2, x + width - 2, y + 5, accent);
-        graphics.fill(x + 2, y + 5, x + width - 2, y + 6, 0xff101116);
+        graphics.fill(x + 2, y + 5, x + width - 2, y + 6, mix(BORDER_DARK, WINDOW, 22));
     }
 
     static void renderPanel(GuiGraphics graphics, int x, int y, int width, int height, int accent) {
@@ -60,17 +120,18 @@ final class EditorTheme {
         graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, BORDER);
         graphics.fill(x + 2, y + 2, x + width - 2, y + height - 2, PANEL);
         graphics.fill(x + 2, y + 2, x + 4, y + height - 2, accent);
-        graphics.fill(x + 4, y + 2, x + width - 2, y + 3, 0xff474c56);
+        graphics.fill(x + 4, y + 2, x + width - 2, y + 3, mix(PANEL, TEXT_MUTED, 25));
     }
 
     static void renderCanvasGrid(GuiGraphics graphics, int x, int y, int width, int height) {
         int right = x + width;
         int bottom = y + height;
+        int gridColor = withAlpha(mix(PANEL_DARK, AVARITIA_CYAN, 25), 0x18);
         for (int gridX = x + 12; gridX < right; gridX += 12) {
-            graphics.fill(gridX, y, gridX + 1, bottom, 0x122f343d);
+            graphics.fill(gridX, y, gridX + 1, bottom, gridColor);
         }
         for (int gridY = y + 12; gridY < bottom; gridY += 12) {
-            graphics.fill(x, gridY, right, gridY + 1, 0x122f343d);
+            graphics.fill(x, gridY, right, gridY + 1, gridColor);
         }
     }
 
@@ -88,14 +149,14 @@ final class EditorTheme {
 
     static void renderDivider(GuiGraphics graphics, int x, int y, int width) {
         graphics.fill(x, y, x + width, y + 1, BORDER_DARK);
-        graphics.fill(x, y + 1, x + width, y + 2, 0xff444952);
+        graphics.fill(x, y + 1, x + width, y + 2, dividerSoft());
     }
 
     static void renderStatusBar(GuiGraphics graphics, Font font, int y, int width,
                                 String left, String center, String right, int statusColor) {
         int edgeInset = width >= 160 ? 42 : 9;
-        graphics.fill(0, y, width, y + 18, 0xff181a20);
-        graphics.fill(0, y, width, y + 1, 0xff505661);
+        graphics.fill(0, y, width, y + 18, mix(PANEL_DARK, WINDOW, 24));
+        graphics.fill(0, y, width, y + 1, mix(PANEL, BORDER, 64));
         graphics.fill(0, y, 4, y + 18, AVARITIA_RED);
         graphics.drawString(font, ScreenText.fit(font, left,
                         Math.max(20, width / 3 - edgeInset - 4)),
@@ -112,7 +173,7 @@ final class EditorTheme {
 
     static void renderBadge(GuiGraphics graphics, Font font, int x, int y, String text, int color) {
         int width = font.width(text) + 8;
-        graphics.fill(x, y, x + width, y + 13, 0xff111319);
+        graphics.fill(x, y, x + width, y + 13, PANEL_DARK);
         graphics.fill(x, y, x + 2, y + 13, color);
         graphics.fill(x + 2, y, x + width, y + 1, color);
         graphics.drawString(font, text, x + 5, y + 3, color, false);
@@ -128,12 +189,13 @@ final class EditorTheme {
     }
 
     static void renderSlot(GuiGraphics graphics, int x, int y, int width, int height, boolean hovered) {
-        int outer = hovered ? AVARITIA_GOLD : 0xff101116;
+        int outer = hovered ? AVARITIA_GOLD : mix(BORDER_DARK, PANEL_DARK, 18);
         graphics.fill(x, y, x + width, y + height, outer);
-        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, 0xff8c9198);
-        graphics.fill(x + 2, y + 2, x + width - 1, y + height - 1, 0xff2c2f36);
-        graphics.fill(x + 2, y + 2, x + width - 2, y + 3, 0xff555a64);
-        graphics.fill(x + 2, y + 2, x + 3, y + height - 2, 0xff555a64);
+        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, mix(BORDER, TEXT, 35));
+        graphics.fill(x + 2, y + 2, x + width - 1, y + height - 1, mix(PANEL_DARK, PANEL, 42));
+        int highlight = mix(PANEL, TEXT_MUTED, 28);
+        graphics.fill(x + 2, y + 2, x + width - 2, y + 3, highlight);
+        graphics.fill(x + 2, y + 2, x + 3, y + height - 2, highlight);
     }
 
     static int changeColor(ChangeType type) {
@@ -162,8 +224,8 @@ final class EditorTheme {
         graphics.fill(x, y, x + width, y + height, BORDER_DARK);
         graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, PANEL_DARK);
         int gutterWidth = Math.min(38, Math.max(26, width / 8));
-        graphics.fill(x + 1, y + 1, x + gutterWidth, y + height - 1, 0xff202229);
-        graphics.fill(x + gutterWidth, y + 1, x + gutterWidth + 1, y + height - 1, 0xff444953);
+        graphics.fill(x + 1, y + 1, x + gutterWidth, y + height - 1, mix(PANEL_DARK, PANEL, 48));
+        graphics.fill(x + gutterWidth, y + 1, x + gutterWidth + 1, y + height - 1, dividerSoft());
         change.ifPresent(type -> graphics.fill(x + 1, y + 1, x + 3, y + height - 1, changeColor(type)));
 
         int visible = visibleCodeLines(height);
@@ -181,29 +243,66 @@ final class EditorTheme {
         graphics.disableScissor();
     }
 
+    static int headerBackground() {
+        return mix(PANEL_DARK, WINDOW, 45);
+    }
+
+    static int errorSurface() {
+        return mix(PANEL_DARK, ERROR, 22);
+    }
+
+    static int dividerSoft() {
+        return mix(PANEL, BORDER, 62);
+    }
+
+    static int selectionSurface() {
+        return mix(PANEL_DARK, AVARITIA_CYAN, 22);
+    }
+
+    static int mix(int first, int second, int secondPercent) {
+        int weight = Math.max(0, Math.min(100, secondPercent));
+        int firstWeight = 100 - weight;
+        int alpha = channel(first, 24) * firstWeight / 100 + channel(second, 24) * weight / 100;
+        int red = channel(first, 16) * firstWeight / 100 + channel(second, 16) * weight / 100;
+        int green = channel(first, 8) * firstWeight / 100 + channel(second, 8) * weight / 100;
+        int blue = channel(first, 0) * firstWeight / 100 + channel(second, 0) * weight / 100;
+        return alpha << 24 | red << 16 | green << 8 | blue;
+    }
+
+    static int withAlpha(int color, int alpha) {
+        return Math.max(0, Math.min(255, alpha)) << 24 | (color & 0x00ffffff);
+    }
+
+    private static int channel(int color, int shift) {
+        return color >>> shift & 0xff;
+    }
+
     private static int syntaxColor(String line, String logicalPath) {
         String trimmed = line.stripLeading();
         if (trimmed.startsWith("//") || trimmed.startsWith("#") || trimmed.startsWith("/*")
                 || trimmed.startsWith("*") || trimmed.startsWith("<!--")) {
-            return 0xff7fa978;
+            return syntaxComment;
         }
         String path = logicalPath.toLowerCase(Locale.ROOT);
         if (path.endsWith(".json")) {
             if (trimmed.startsWith("\"") && trimmed.contains(":")) {
-                return 0xff8fc7df;
+                return syntaxProperty;
             }
-            return trimmed.contains("\"") ? 0xffd8b886 : TEXT;
+            return trimmed.contains("\"") ? syntaxString : TEXT;
         }
         if (trimmed.contains("ServerEvents") || trimmed.contains("AvaritiaEvents")
                 || trimmed.contains("mods.avaritia")) {
-            return 0xffc59be1;
+            return syntaxKeyword;
         }
         if (trimmed.contains(".id(") || trimmed.startsWith("<")) {
             return AVARITIA_CYAN;
         }
         if (trimmed.contains("\"") || trimmed.contains("'")) {
-            return 0xffd8b886;
+            return syntaxString;
         }
         return TEXT;
+    }
+
+    record ThemeSwitchResult(EditorThemeStyle style, Optional<String> warning) {
     }
 }

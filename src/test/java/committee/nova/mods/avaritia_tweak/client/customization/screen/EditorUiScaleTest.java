@@ -38,4 +38,30 @@ class EditorUiScaleTest {
         assertThat(layout.gridPixels()).isEqualTo(162);
         assertThat(layout.outputOverlapsGrid()).isFalse();
     }
+
+    @Test
+    void compactHeaderKeepsThemeSwitcherSeparateFromPanelTabs() {
+        EditorUiScale.EditorHeader standard = EditorUiScale.editorHeader(320);
+        EditorUiScale.EditorHeader narrow = EditorUiScale.editorHeader(240);
+
+        assertThat(standard.tabsOverlapTheme()).isFalse();
+        assertThat(narrow.tabsOverlapTheme()).isFalse();
+        assertThat(standard.themeX() + standard.themeWidth()).isEqualTo(312);
+        assertThat(narrow.themeX() + narrow.themeWidth()).isEqualTo(232);
+        assertThat(standard.tabWidth()).isPositive();
+        assertThat(narrow.tabWidth()).isPositive();
+    }
+
+    @Test
+    void recipeSelectorKeepsInspectorUsableAtEverySupportedScale() {
+        EditorUiScale.SplitPane standard = EditorUiScale.recipeSelectorSplit(720);
+        EditorUiScale.SplitPane scaled = EditorUiScale.recipeSelectorSplit(308);
+        EditorUiScale.SplitPane narrow = EditorUiScale.recipeSelectorSplit(100);
+
+        assertThat(standard).isEqualTo(new EditorUiScale.SplitPane(410, 292));
+        assertThat(scaled).isEqualTo(new EditorUiScale.SplitPane(169, 121));
+        assertThat(narrow.listWidth()).isPositive();
+        assertThat(narrow.detailWidth()).isPositive();
+        assertThat(narrow.listWidth() + narrow.detailWidth()).isEqualTo(82);
+    }
 }

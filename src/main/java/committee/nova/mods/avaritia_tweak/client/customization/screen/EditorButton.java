@@ -37,7 +37,8 @@ final class EditorButton extends AbstractButton {
         Palette palette = palette(highlighted);
         int x = this.getX();
         int y = this.getY();
-        graphics.fill(x + 1, y + 2, x + this.width + 1, y + this.height + 2, 0x88000000);
+        graphics.fill(x + 1, y + 2, x + this.width + 1, y + this.height + 2,
+                EditorTheme.withAlpha(EditorTheme.BORDER_DARK, 0x88));
         graphics.fill(x, y, x + this.width, y + this.height, palette.border);
         graphics.fill(x + 1, y + 1, x + this.width - 1, y + this.height - 1, palette.background);
         graphics.fill(x + 1, y + 1, x + this.width - 1, y + 2, palette.highlight);
@@ -62,35 +63,27 @@ final class EditorButton extends AbstractButton {
 
     private Palette palette(boolean highlighted) {
         if (!this.active) {
-            return new Palette(0xff34373e, 0xff23252a, 0xff2b2e34,
-                    0xff4c515b, 0xff747983);
+            int background = EditorTheme.mix(EditorTheme.PANEL_DARK, EditorTheme.PANEL, 36);
+            return new Palette(EditorTheme.mix(EditorTheme.BORDER_DARK, EditorTheme.BORDER, 45),
+                    background, EditorTheme.mix(background, EditorTheme.TEXT_MUTED, 12),
+                    EditorTheme.BORDER, EditorTheme.TEXT_FAINT);
         }
         return switch (this.style) {
-            case PRIMARY -> new Palette(EditorTheme.AVARITIA_CYAN,
-                    highlighted ? 0xff3d686b : 0xff31575a,
-                    highlighted ? 0xff79dddd : 0xff548f92,
-                    EditorTheme.AVARITIA_CYAN, EditorTheme.TEXT);
-            case DANGER -> new Palette(EditorTheme.AVARITIA_RED,
-                    highlighted ? 0xff65343a : 0xff4d2c31,
-                    highlighted ? 0xffb45a61 : 0xff85444a,
-                    EditorTheme.AVARITIA_RED, EditorTheme.TEXT);
-            case QUIET -> new Palette(highlighted ? 0xff69707c : 0xff454a54,
-                    highlighted ? 0xff393d45 : 0xff292c33,
-                    highlighted ? 0xff525863 : 0xff3a3e47,
-                    EditorTheme.AVARITIA_GOLD, EditorTheme.TEXT);
-            case TAB -> new Palette(highlighted ? EditorTheme.AVARITIA_RED : 0xff4d535e,
-                    highlighted ? 0xff3b3238 : 0xff25282e,
-                    highlighted ? 0xff5a474d : 0xff373a42,
-                    EditorTheme.AVARITIA_RED, highlighted ? EditorTheme.TEXT : EditorTheme.TEXT_MUTED);
-            case LIST -> new Palette(highlighted ? EditorTheme.AVARITIA_CYAN : 0xff484d57,
-                    highlighted ? 0xff354347 : 0xff292c33,
-                    highlighted ? 0xff4c6064 : 0xff3a3e46,
-                    EditorTheme.AVARITIA_CYAN, EditorTheme.TEXT);
-            case DEFAULT -> new Palette(highlighted ? EditorTheme.AVARITIA_GOLD : 0xff555b66,
-                    highlighted ? 0xff42464f : 0xff33363e,
-                    highlighted ? 0xff5d626d : 0xff484c55,
-                    EditorTheme.AVARITIA_GOLD, EditorTheme.TEXT);
+            case PRIMARY -> accented(EditorTheme.AVARITIA_CYAN, highlighted, false);
+            case DANGER -> accented(EditorTheme.ERROR, highlighted, false);
+            case QUIET -> accented(EditorTheme.AVARITIA_GOLD, highlighted, true);
+            case TAB -> accented(EditorTheme.AVARITIA_RED, highlighted, !highlighted);
+            case LIST -> accented(EditorTheme.AVARITIA_CYAN, highlighted, false);
+            case DEFAULT -> accented(EditorTheme.AVARITIA_GOLD, highlighted, false);
         };
+    }
+
+    private static Palette accented(int accent, boolean highlighted, boolean mutedText) {
+        int border = highlighted ? accent : EditorTheme.mix(EditorTheme.BORDER, accent, 18);
+        int background = EditorTheme.mix(EditorTheme.PANEL_DARK, accent, highlighted ? 29 : 15);
+        int highlight = EditorTheme.mix(background, EditorTheme.TEXT, highlighted ? 22 : 11);
+        return new Palette(border, background, highlight, accent,
+                mutedText ? EditorTheme.TEXT_MUTED : EditorTheme.TEXT);
     }
 
     @Override

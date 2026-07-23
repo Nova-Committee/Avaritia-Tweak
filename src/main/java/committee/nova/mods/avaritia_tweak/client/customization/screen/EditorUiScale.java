@@ -11,6 +11,7 @@ final class EditorUiScale {
     private static final int EDGE_MARGIN = 6;
     private static final int GHOST_SLOT_SIZE = 18;
     private static final int RESULT_GAP = 10;
+    private static final int EDITOR_HEADER_INSET = 8;
 
     private EditorUiScale() {
     }
@@ -27,6 +28,15 @@ final class EditorUiScale {
         return width >= minimumWidth && height >= minimumHeight;
     }
 
+    static EditorHeader editorHeader(int screenWidth) {
+        int innerWidth = Math.max(2, screenWidth - EDITOR_HEADER_INSET * 2);
+        int preferredThemeWidth = Math.min(124, Math.max(84, screenWidth / 4));
+        int themeWidth = Math.min(preferredThemeWidth, Math.max(1, innerWidth / 2));
+        int themeX = Math.max(EDITOR_HEADER_INSET, screenWidth - themeWidth - EDITOR_HEADER_INSET);
+        int tabWidth = Math.max(1, Math.max(3, themeX - 12) / 3);
+        return new EditorHeader(themeX, themeWidth, tabWidth);
+    }
+
     static ShapedGrid shapedGrid(int x, int y, int width, int availableHeight, int gridSize) {
         int resultX = x + Math.max(0, width - GHOST_SLOT_SIZE);
         int availableGridWidth = Math.max(1, resultX - RESULT_GAP - x);
@@ -38,7 +48,26 @@ final class EditorUiScale {
         return new ShapedGrid(x, y, cellSize, gridPixels, resultX, resultY);
     }
 
+    static SplitPane recipeSelectorSplit(int panelWidth) {
+        int availableWidth = Math.max(2, panelWidth - 18);
+        int minimumDetailWidth = Math.min(118, Math.max(1, availableWidth / 3));
+        int maximumListWidth = Math.max(1, availableWidth - minimumDetailWidth);
+        int preferredListWidth = panelWidth >= 560
+                ? Math.min(410, panelWidth * 3 / 5)
+                : Math.max(148, panelWidth * 55 / 100);
+        int listWidth = Math.max(1, Math.min(preferredListWidth, maximumListWidth));
+        return new SplitPane(listWidth, Math.max(1, availableWidth - listWidth));
+    }
+
     record Frame(int left, int top, int width, int height) {
+    }
+
+    record EditorHeader(int themeX, int themeWidth, int tabWidth) {
+        boolean tabsOverlapTheme() {
+            int finalTabRight = EDITOR_HEADER_INSET + this.tabWidth * 2
+                    + Math.max(1, this.tabWidth - 2);
+            return finalTabRight > this.themeX;
+        }
     }
 
     record ShapedGrid(int gridX, int gridY, int cellSize, int gridPixels,
@@ -46,5 +75,8 @@ final class EditorUiScale {
         boolean outputOverlapsGrid() {
             return this.resultX < this.gridX + this.gridPixels;
         }
+    }
+
+    record SplitPane(int listWidth, int detailWidth) {
     }
 }

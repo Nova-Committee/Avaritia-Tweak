@@ -186,7 +186,7 @@ public final class HistoryScreen extends Screen {
         }
         int lineX = layout.left + 18;
         graphics.fill(lineX, layout.listTop + 9, lineX + 2,
-                layout.listTop + (count - 1) * 22 + 11, 0xff59616d);
+                layout.listTop + (count - 1) * 22 + 11, EditorTheme.dividerSoft());
         for (int row = 0; row < count; row++) {
             Revision revision = this.revisions.get(start + row);
             int y = layout.listTop + row * 22 + 7;

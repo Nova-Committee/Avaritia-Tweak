@@ -2,6 +2,8 @@ package committee.nova.mods.avaritia_tweak.client.customization.screen;
 
 import committee.nova.mods.avaritia_tweak.client.customization.importers.AvaritiaRecipeImporter;
 import committee.nova.mods.avaritia_tweak.client.customization.importers.RecipeImportResult;
+import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
+import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -16,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 public final class RecipeSelectScreen extends Screen {
@@ -33,6 +36,7 @@ public final class RecipeSelectScreen extends Screen {
     private EditorButton nextPage;
     private EditorButton importButton;
     private Recipe<?> selected;
+    private Optional<RecipeImportResult> selectedInspection = Optional.empty();
     private int page;
     private String query = "";
     private boolean loaded;
@@ -113,17 +117,36 @@ public final class RecipeSelectScreen extends Screen {
                 .forEach(this.filteredRecipes::add);
         this.page = 0;
         this.selected = null;
+        this.selectedInspection = Optional.empty();
         requestResultRefresh();
     }
 
     private void importSelected() {
-        if (this.selected == null || Minecraft.getInstance().level == null) {
+        if (this.selected == null) {
             return;
         }
-        RecipeImportResult result = this.importer.importRecipe(this.selected, this.target,
-                Minecraft.getInstance().level.registryAccess());
-        this.onImported.accept(result);
+        if (this.selectedInspection.isEmpty()) {
+            this.selectedInspection = inspect(this.selected);
+        }
+        if (this.selectedInspection.isEmpty()) {
+            return;
+        }
+        this.onImported.accept(this.selectedInspection.orElseThrow());
         Minecraft.getInstance().setScreen(this.previous);
+    }
+
+    private Optional<RecipeImportResult> inspect(Recipe<?> recipe) {
+        if (Minecraft.getInstance().level == null) {
+            return Optional.empty();
+        }
+        return Optional.of(this.importer.importRecipe(recipe, this.target,
+                Minecraft.getInstance().level.registryAccess()));
+    }
+
+    private void selectRecipe(Recipe<?> recipe) {
+        this.selected = recipe;
+        this.selectedInspection = inspect(recipe);
+        requestResultRefresh();
     }
 
     private ItemStack result(Recipe<?> recipe) {
@@ -146,17 +169,15 @@ public final class RecipeSelectScreen extends Screen {
             Recipe<?> recipe = this.filteredRecipes.get(index);
             int y = layout.listTop + (index - start) * 22;
             String id = ScreenText.fit(this.font, recipe.getId().toString(), layout.listWidth - 58);
-            EditorButton row = EditorButton.builder(Component.literal(id), button -> {
-                        this.selected = recipe;
-                        requestResultRefresh();
-                    }).bounds(layout.left + 34, y, layout.listWidth - 42, 20)
+            EditorButton row = EditorButton.builder(Component.literal(id), button -> selectRecipe(recipe))
+                    .bounds(layout.left + 34, y, layout.listWidth - 42, 20)
                     .style(EditorButton.Style.LIST).selected(recipe == this.selected).build();
             this.resultWidgets.add(this.addRenderableWidget(row));
             this.visibleRows.add(new RecipeRow(recipe, layout.left + 10, y + 1));
         }
         this.previousPage.active = this.page > 0;
         this.nextPage.active = this.page < maxPage;
-        this.importButton.active = this.selected != null;
+        this.importButton.active = this.selected != null && this.selectedInspection.isPresent();
     }
 
     private void requestResultRefresh() {
@@ -204,7 +225,7 @@ public final class RecipeSelectScreen extends Screen {
                 Component.translatable("gui.avaritia_tweak.recipe_import.inspector"), "",
                 EditorTheme.AVARITIA_GOLD);
         renderRecipeIcons(graphics, mouseX, mouseY);
-        renderSelected(graphics, layout);
+        Optional<Component> inspectorTooltip = renderSelected(graphics, layout, mouseX, mouseY);
 
         int pageSize = pageSize(layout);
         graphics.drawCenteredString(this.font,
@@ -212,6 +233,7 @@ public final class RecipeSelectScreen extends Screen {
                 layout.left + layout.listWidth / 2,
                 layout.top + layout.height - 24, EditorTheme.TEXT_MUTED);
         super.render(graphics, mouseX, mouseY, partialTick);
+        inspectorTooltip.ifPresent(tooltip -> graphics.renderTooltip(this.font, tooltip, mouseX, mouseY));
     }
 
     private void renderRecipeIcons(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -223,35 +245,132 @@ public final class RecipeSelectScreen extends Screen {
         }
     }
 
-    private void renderSelected(GuiGraphics graphics, Layout layout) {
+    private Optional<Component> renderSelected(GuiGraphics graphics, Layout layout,
+                                               int mouseX, int mouseY) {
         if (this.selected == null) {
             graphics.drawWordWrap(this.font,
                     Component.translatable("gui.avaritia_tweak.recipe_import.select_help"),
                     layout.detailX, layout.top + 68, layout.detailWidth, EditorTheme.TEXT_MUTED);
-            return;
+            return Optional.empty();
         }
         ItemStack result = result(this.selected);
         int slotX = layout.detailX;
-        int slotY = layout.top + 68;
-        EditorTheme.renderSlot(graphics, slotX, slotY, 38, 38, false);
-        graphics.renderItem(result, slotX + 11, slotY + 11);
-        graphics.renderItemDecorations(this.font, result, slotX + 11, slotY + 11);
+        int slotY = layout.top + 62;
+        int slotSize = Math.min(38, Math.max(24, layout.detailWidth / 4));
+        int itemOffset = Math.max(1, (slotSize - 16) / 2);
+        EditorTheme.renderSlot(graphics, slotX, slotY, slotSize, slotSize, false);
+        graphics.renderItem(result, slotX + itemOffset, slotY + itemOffset);
+        graphics.renderItemDecorations(this.font, result, slotX + itemOffset, slotY + itemOffset);
         graphics.drawString(this.font,
-                ScreenText.fit(this.font, result.getHoverName().getString(), layout.detailWidth - 48),
-                slotX + 46, slotY + 5, EditorTheme.TEXT, false);
+                ScreenText.fit(this.font, result.getHoverName().getString(),
+                        Math.max(0, layout.detailWidth - slotSize - 8)),
+                slotX + slotSize + 6, slotY + 4, EditorTheme.TEXT, false);
         graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.recipe_import.result"),
-                slotX + 46, slotY + 19, EditorTheme.TEXT_FAINT, false);
+                slotX + slotSize + 6, slotY + 17, EditorTheme.TEXT_FAINT, false);
 
-        int y = slotY + 54;
-        graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.recipe_import.recipe_id"),
-                layout.detailX, y, EditorTheme.TEXT_MUTED, false);
-        graphics.drawWordWrap(this.font, Component.literal(this.selected.getId().toString()),
-                layout.detailX, y + 13, layout.detailWidth, EditorTheme.AVARITIA_CYAN);
-        graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.recipe_import.handler"),
-                layout.detailX, y + 50, EditorTheme.TEXT_MUTED, false);
-        graphics.drawWordWrap(this.font,
-                Component.literal(this.selected.getClass().getSimpleName()),
-                layout.detailX, y + 63, layout.detailWidth, EditorTheme.SUCCESS);
+        int y = slotY + slotSize + 6;
+        y = renderInspectorLine(graphics, layout.detailX, y, layout.detailWidth,
+                Component.translatable("gui.avaritia_tweak.recipe_import.id_short"),
+                this.selected.getId().toString(), EditorTheme.AVARITIA_CYAN);
+
+        RecipeImportResult inspection = this.selectedInspection.orElse(null);
+        if (inspection instanceof RecipeImportResult.Failure failure) {
+            return renderImportFailure(graphics, layout, y, failure);
+        }
+        if (!(inspection instanceof RecipeImportResult.Success success)) {
+            graphics.drawWordWrap(this.font,
+                    Component.translatable("gui.avaritia_tweak.recipe_import.details_unavailable"),
+                    layout.detailX, y + 2, layout.detailWidth, EditorTheme.ERROR);
+            return Optional.empty();
+        }
+
+        CustomizationEntry entry = success.entry();
+        RecipeInspectorDetails.Details details = RecipeInspectorDetails.from(entry);
+        y = renderInspectorLine(graphics, layout.detailX, y, layout.detailWidth,
+                Component.translatable("gui.avaritia_tweak.recipe_import.type"),
+                Component.translatable("gui.avaritia_tweak.kind."
+                        + details.kind().name().toLowerCase(Locale.ROOT)).getString(), EditorTheme.TEXT);
+        boolean compact = layout.detailWidth < 180 || layout.height < 300;
+        if (!compact) {
+            y = renderInspectorLine(graphics, layout.detailX, y, layout.detailWidth,
+                    Component.translatable("gui.avaritia_tweak.recipe_import.handler"),
+                    this.selected.getClass().getSimpleName(), EditorTheme.SUCCESS);
+        }
+        for (RecipeInspectorDetails.Attribute attribute : details.attributes()) {
+            y = renderInspectorLine(graphics, layout.detailX, y, layout.detailWidth,
+                    Component.translatable(attribute.labelKey()), attribute.value(), EditorTheme.TEXT);
+        }
+        String ingredientCount = details.cells().size() == details.slotCount()
+                ? Integer.toString(details.cells().size())
+                : details.cells().size() + "/" + details.slotCount();
+        y = renderInspectorLine(graphics, layout.detailX, y, layout.detailWidth,
+                Component.translatable("gui.avaritia_tweak.recipe_import.ingredients"),
+                ingredientCount, EditorTheme.AVARITIA_GOLD);
+        return renderIngredientGrid(graphics, layout, details, y + 1, mouseX, mouseY);
+    }
+
+    private Optional<Component> renderImportFailure(GuiGraphics graphics, Layout layout, int y,
+                                                    RecipeImportResult.Failure failure) {
+        graphics.drawString(this.font,
+                Component.translatable("gui.avaritia_tweak.recipe_import.cannot_decode"),
+                layout.detailX, y + 2, EditorTheme.ERROR, false);
+        String detail = failure.fieldPath() + ": " + failure.message();
+        graphics.enableScissor(layout.detailX, y + 13,
+                layout.detailX + layout.detailWidth, layout.detailsBottom);
+        graphics.drawWordWrap(this.font, Component.literal(detail), layout.detailX, y + 13,
+                layout.detailWidth, EditorTheme.TEXT_MUTED);
+        graphics.disableScissor();
+        return Optional.empty();
+    }
+
+    private int renderInspectorLine(GuiGraphics graphics, int x, int y, int width,
+                                    Component label, String value, int valueColor) {
+        String labelText = label.getString() + ":";
+        int valueX = x + this.font.width(labelText) + 4;
+        if (valueX >= x + width - 8) {
+            String line = ScreenText.fit(this.font, labelText + " " + value, width);
+            graphics.drawString(this.font, line, x, y, valueColor, false);
+            return y + 11;
+        }
+        graphics.drawString(this.font, labelText, x, y, EditorTheme.TEXT_MUTED, false);
+        String fitted = ScreenText.fit(this.font, value, Math.max(0, x + width - valueX));
+        graphics.drawString(this.font, fitted, valueX, y, valueColor, false);
+        return y + 11;
+    }
+
+    private Optional<Component> renderIngredientGrid(GuiGraphics graphics, Layout layout,
+                                                     RecipeInspectorDetails.Details details,
+                                                     int gridTop, int mouseX, int mouseY) {
+        int availableHeight = Math.max(1, layout.detailsBottom - gridTop - 2);
+        int cellByWidth = Math.max(1, layout.detailWidth / details.columns());
+        int cellByHeight = Math.max(1, availableHeight / details.rows());
+        int cellSize = Math.max(4, Math.min(18, Math.min(cellByWidth, cellByHeight)));
+        int gridWidth = details.columns() * cellSize;
+        int gridX = layout.detailX + Math.max(0, (layout.detailWidth - gridWidth) / 2);
+        Optional<Component> tooltip = Optional.empty();
+        graphics.enableScissor(layout.detailX, gridTop,
+                layout.detailX + layout.detailWidth, layout.detailsBottom);
+        for (int slot = 0; slot < details.slotCount(); slot++) {
+            int x = gridX + slot % details.columns() * cellSize;
+            int y = gridTop + slot / details.columns() * cellSize;
+            RecipeInspectorDetails.IngredientCell cell = details.cells().get(slot);
+            boolean hovered = mouseX >= x && mouseX < x + cellSize
+                    && mouseY >= y && mouseY < y + cellSize
+                    && mouseY >= gridTop && mouseY < layout.detailsBottom;
+            Optional<IngredientSpec> ingredient =
+                    Optional.ofNullable(cell).map(RecipeInspectorDetails.IngredientCell::ingredient);
+            GhostIngredientButton.renderReadOnlyPreview(graphics, x, y, cellSize, ingredient, hovered);
+            if (hovered && cell != null) {
+                Component description = Component.literal(GhostIngredientButton.describe(cell.ingredient()));
+                tooltip = cell.roleKey().isEmpty()
+                        ? Optional.of(description)
+                        : Optional.of(Component.translatable(
+                        "gui.avaritia_tweak.recipe_import.ingredient_role",
+                        Component.translatable(cell.roleKey()), description));
+            }
+        }
+        graphics.disableScissor();
+        return tooltip;
     }
 
     private int pageSize(Layout layout) {
@@ -268,9 +387,10 @@ public final class RecipeSelectScreen extends Screen {
         int panelHeight = frame.height();
         int left = frame.left();
         int top = frame.top();
-        int listWidth = Math.max(210, Math.min(410, panelWidth * 3 / 5));
+        EditorUiScale.SplitPane split = EditorUiScale.recipeSelectorSplit(panelWidth);
+        int listWidth = split.listWidth();
         int detailX = left + listWidth + 10;
-        int detailWidth = panelWidth - listWidth - 18;
+        int detailWidth = split.detailWidth();
         int listTop = top + 84;
         int detailsBottom = top + panelHeight - 38;
         return new Layout(left, top, panelWidth, panelHeight, listWidth,

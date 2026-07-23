@@ -176,7 +176,7 @@ final class RegistryItemSelectScreen extends Screen {
         graphics.fill(layout.left + 10, layout.top + 46,
                 layout.left + ACTIVITY_RAIL_WIDTH - 9, layout.top + 82, EditorTheme.BORDER_DARK);
         graphics.fill(layout.left + 11, layout.top + 47,
-                layout.left + ACTIVITY_RAIL_WIDTH - 10, layout.top + 81, 0xff31474b);
+                layout.left + ACTIVITY_RAIL_WIDTH - 10, layout.top + 81, EditorTheme.selectionSurface());
         graphics.fill(layout.left + 11, layout.top + 47,
                 layout.left + 14, layout.top + 81, EditorTheme.AVARITIA_CYAN);
         graphics.drawCenteredString(this.font, "ITEM", center, layout.top + 58, EditorTheme.TEXT);
