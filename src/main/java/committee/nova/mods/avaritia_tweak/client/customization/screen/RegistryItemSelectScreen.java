@@ -24,10 +24,13 @@ final class RegistryItemSelectScreen extends Screen {
     private final Consumer<ResourceLocation> onSelected;
     private final List<ResourceLocation> allItems;
     private final List<ResourceLocation> filteredItems = new ArrayList<>();
+    private final List<GhostItemStackButton> resultWidgets = new ArrayList<>();
+    private final DeferredSearchRefresh searchRefresh = new DeferredSearchRefresh();
     private EditBox searchBox;
+    private EditorButton previousPage;
+    private EditorButton nextPage;
     private String query = "";
     private int page;
-    private boolean rebuildQueued;
 
     RegistryItemSelectScreen(Screen previous, Consumer<ResourceLocation> onSelected) {
         super(Component.translatable("gui.avaritia_tweak.item_browser.title"));
@@ -42,6 +45,7 @@ final class RegistryItemSelectScreen extends Screen {
     @Override
     protected void init() {
         Layout layout = layout();
+        this.resultWidgets.clear();
         this.searchBox = new EditBox(this.font, layout.gridX, layout.top + 38,
                 layout.gridWidth, 20, Component.translatable("gui.avaritia_tweak.search_items"));
         this.searchBox.setValue(this.query);
@@ -49,34 +53,21 @@ final class RegistryItemSelectScreen extends Screen {
         this.searchBox.setResponder(this::filter);
         this.addRenderableWidget(this.searchBox);
 
-        int pageSize = pageSize(layout);
-        int maxPage = maxPage(pageSize);
-        this.page = Math.min(this.page, maxPage);
-        int start = this.page * pageSize;
-        int end = Math.min(this.filteredItems.size(), start + pageSize);
-        for (int index = start; index < end; index++) {
-            ResourceLocation id = this.filteredItems.get(index);
-            int local = index - start;
-            int x = layout.gridX + 2 + (local % layout.columns) * CELL_SIZE;
-            int y = layout.gridTop + 2 + (local / layout.columns) * CELL_SIZE;
-            this.addRenderableWidget(new GhostItemStackButton(x, y,
-                    () -> new ItemStackSpec(id, 1), button -> select(id)));
-        }
-
         int actionY = layout.top + layout.height - 30;
-        this.addRenderableWidget(EditorButton.builder(Component.literal("<"), button -> {
+        this.previousPage = this.addRenderableWidget(EditorButton.builder(Component.literal("<"), button -> {
             this.page = Math.max(0, this.page - 1);
-            rebuild();
+            requestResultRefresh();
         }).bounds(layout.gridX, actionY, 34, 20).style(EditorButton.Style.QUIET).build());
         this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.avaritia_tweak.cancel"),
                         button -> onClose())
                 .bounds(layout.left + layout.width - 90, actionY, 80, 20)
                 .style(EditorButton.Style.QUIET).build());
-        this.addRenderableWidget(EditorButton.builder(Component.literal(">"), button -> {
-            this.page = Math.min(maxPage(pageSize), this.page + 1);
-            rebuild();
+        this.nextPage = this.addRenderableWidget(EditorButton.builder(Component.literal(">"), button -> {
+            this.page = Math.min(maxPage(pageSize(layout)), this.page + 1);
+            requestResultRefresh();
         }).bounds(layout.left + layout.width - 130, actionY, 34, 20)
                 .style(EditorButton.Style.QUIET).build());
+        refreshResults();
         this.setInitialFocus(this.searchBox);
         this.searchBox.setCursorPosition(this.query.length());
     }
@@ -95,29 +86,45 @@ final class RegistryItemSelectScreen extends Screen {
                         || id.toString().toLowerCase(Locale.ROOT).contains(normalized))
                 .forEach(this.filteredItems::add);
         this.page = 0;
-        if (!this.rebuildQueued) {
-            this.rebuildQueued = true;
-            Minecraft.getInstance().execute(() -> {
-                this.rebuildQueued = false;
-                if (Minecraft.getInstance().screen == this) {
-                    rebuild();
-                }
-            });
-        }
+        requestResultRefresh();
     }
 
-    private void rebuild() {
-        this.clearWidgets();
-        this.init();
+    private void refreshResults() {
+        this.resultWidgets.forEach(this::removeWidget);
+        this.resultWidgets.clear();
+        Layout layout = layout();
+        int pageSize = pageSize(layout);
+        int maxPage = maxPage(pageSize);
+        this.page = Math.min(this.page, maxPage);
+        int start = this.page * pageSize;
+        int end = Math.min(this.filteredItems.size(), start + pageSize);
+        for (int index = start; index < end; index++) {
+            ResourceLocation id = this.filteredItems.get(index);
+            int local = index - start;
+            int x = layout.gridX + 2 + (local % layout.columns) * CELL_SIZE;
+            int y = layout.gridTop + 2 + (local / layout.columns) * CELL_SIZE;
+            GhostItemStackButton widget = new GhostItemStackButton(x, y,
+                    () -> new ItemStackSpec(id, 1), button -> select(id));
+            this.resultWidgets.add(this.addRenderableWidget(widget));
+        }
+        this.previousPage.active = this.page > 0;
+        this.nextPage.active = this.page < maxPage;
+    }
+
+    private void requestResultRefresh() {
+        this.searchRefresh.request(this, this::refreshResults);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         Layout layout = layout();
         int pageSize = pageSize(layout);
-        this.page = Math.max(0, Math.min(maxPage(pageSize),
+        int next = Math.max(0, Math.min(maxPage(pageSize),
                 this.page + (delta < 0 ? 1 : -1)));
-        rebuild();
+        if (next != this.page) {
+            this.page = next;
+            requestResultRefresh();
+        }
         return true;
     }
 
@@ -190,10 +197,11 @@ final class RegistryItemSelectScreen extends Screen {
     }
 
     private Layout layout() {
-        int panelWidth = Math.min(620, this.width - 12);
-        int panelHeight = Math.min(360, this.height - 12);
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
+        EditorUiScale.Frame frame = EditorUiScale.fit(this.width, this.height, 620, 360);
+        int panelWidth = frame.width();
+        int panelHeight = frame.height();
+        int left = frame.left();
+        int top = frame.top();
         int gridX = left + ACTIVITY_RAIL_WIDTH + 12;
         int gridWidth = panelWidth - ACTIVITY_RAIL_WIDTH - 22;
         int gridTop = top + 66;

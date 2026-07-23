@@ -22,7 +22,13 @@ public final class GhostIngredientButton extends AbstractButton {
 
     public GhostIngredientButton(int x, int y, Supplier<Optional<IngredientSpec>> value,
                                  Consumer<GhostIngredientButton> onPress) {
-        super(x, y, 18, 18, Component.translatable("gui.avaritia_tweak.ghost_ingredient"));
+        this(x, y, 18, value, onPress);
+    }
+
+    public GhostIngredientButton(int x, int y, int size,
+                                 Supplier<Optional<IngredientSpec>> value,
+                                 Consumer<GhostIngredientButton> onPress) {
+        super(x, y, size, size, Component.translatable("gui.avaritia_tweak.ghost_ingredient"));
         this.value = value;
         this.onPress = onPress;
     }
@@ -38,20 +44,20 @@ public final class GhostIngredientButton extends AbstractButton {
                 this.isHoveredOrFocused());
         Optional<IngredientSpec> current = this.value.get();
         if (current.isEmpty()) {
-            graphics.drawCenteredString(Minecraft.getInstance().font, "+",
-                    this.getX() + 9, this.getY() + 5, EditorTheme.TEXT_MUTED);
+            renderCompactMark(graphics, false, EditorTheme.TEXT_MUTED);
         } else if (current.get() instanceof IngredientSpec.Item item) {
             Item registered = ForgeRegistries.ITEMS.getValue(item.itemId());
             ItemStack stack = registered == null ? ItemStack.EMPTY : new ItemStack(registered);
             item.strictNbt().ifPresent(stack::setTag);
-            graphics.renderItem(stack, this.getX() + 1, this.getY() + 1);
+            renderScaledItem(graphics, stack);
         } else {
-            graphics.drawCenteredString(Minecraft.getInstance().font, "#",
-                    this.getX() + 9, this.getY() + 5, EditorTheme.AVARITIA_CYAN);
+            renderCompactMark(graphics, true, EditorTheme.AVARITIA_CYAN);
         }
         if (current.filter(IngredientSpec.Item.class::isInstance)
                 .map(IngredientSpec.Item.class::cast).flatMap(IngredientSpec.Item::strictNbt).isPresent()) {
-            graphics.fill(this.getX() + 13, this.getY() + 2, this.getX() + 16, this.getY() + 5,
+            int marker = Math.max(2, Math.min(3, this.width / 4));
+            graphics.fill(this.getX() + this.width - marker - 2, this.getY() + 2,
+                    this.getX() + this.width - 2, this.getY() + 2 + marker,
                     EditorTheme.AVARITIA_RED);
         }
         if (this.isHovered()) {
@@ -72,5 +78,29 @@ public final class GhostIngredientButton extends AbstractButton {
         }
         IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
         return item.itemId() + (item.strictNbt().isPresent() ? " (strict NBT)" : "");
+    }
+
+    private void renderScaledItem(GuiGraphics graphics, ItemStack stack) {
+        float scale = Math.max(1, this.width - 2) / 16.0F;
+        graphics.pose().pushPose();
+        graphics.pose().translate(this.getX() + 1, this.getY() + 1, 0.0F);
+        graphics.pose().scale(scale, scale, 1.0F);
+        graphics.renderItem(stack, 0, 0);
+        graphics.pose().popPose();
+    }
+
+    private void renderCompactMark(GuiGraphics graphics, boolean tag, int color) {
+        if (this.width >= 14) {
+            graphics.drawCenteredString(Minecraft.getInstance().font, tag ? "#" : "+",
+                    this.getX() + this.width / 2, this.getY() + (this.height - 8) / 2, color);
+            return;
+        }
+        int centerX = this.getX() + this.width / 2;
+        int centerY = this.getY() + this.height / 2;
+        graphics.fill(centerX - 2, centerY, centerX + 3, centerY + 1, color);
+        graphics.fill(centerX, centerY - 2, centerX + 1, centerY + 3, color);
+        if (tag) {
+            graphics.fill(centerX - 2, centerY - 2, centerX + 3, centerY - 1, color);
+        }
     }
 }

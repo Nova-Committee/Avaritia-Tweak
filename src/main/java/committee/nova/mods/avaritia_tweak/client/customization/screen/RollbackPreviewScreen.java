@@ -283,10 +283,11 @@ public final class RollbackPreviewScreen extends Screen {
     }
 
     private Layout layout() {
-        int panelWidth = Math.min(720, this.width - 12);
-        int panelHeight = Math.min(390, this.height - 12);
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
+        EditorUiScale.Frame frame = EditorUiScale.fit(this.width, this.height, 720, 390);
+        int panelWidth = frame.width();
+        int panelHeight = frame.height();
+        int left = frame.left();
+        int top = frame.top();
         boolean wide = panelWidth >= 560;
         int codeX = wide ? left + SIDEBAR_WIDTH + 8 : left + 8;
         int codeWidth = wide ? panelWidth - SIDEBAR_WIDTH - 16 : panelWidth - 16;

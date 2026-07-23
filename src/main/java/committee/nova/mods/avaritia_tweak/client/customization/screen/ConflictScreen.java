@@ -132,10 +132,11 @@ public final class ConflictScreen extends Screen {
     }
 
     private Layout layout() {
-        int panelWidth = Math.min(560, this.width - 12);
-        int panelHeight = Math.min(310, this.height - 12);
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
+        EditorUiScale.Frame frame = EditorUiScale.fit(this.width, this.height, 560, 310);
+        int panelWidth = frame.width();
+        int panelHeight = frame.height();
+        int left = frame.left();
+        int top = frame.top();
         return new Layout(left, top, panelWidth, panelHeight);
     }
 

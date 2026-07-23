@@ -26,12 +26,16 @@ public final class RecipeSelectScreen extends Screen {
     private final List<Recipe<?>> allRecipes = new ArrayList<>();
     private final List<Recipe<?>> filteredRecipes = new ArrayList<>();
     private final List<RecipeRow> visibleRows = new ArrayList<>();
+    private final List<EditorButton> resultWidgets = new ArrayList<>();
+    private final DeferredSearchRefresh searchRefresh = new DeferredSearchRefresh();
     private EditBox searchBox;
+    private EditorButton previousPage;
+    private EditorButton nextPage;
+    private EditorButton importButton;
     private Recipe<?> selected;
     private int page;
     private String query = "";
     private boolean loaded;
-    private boolean rebuildQueued;
 
     public RecipeSelectScreen(Screen previous, OutputTarget target,
                               Consumer<RecipeImportResult> onImported) {
@@ -48,6 +52,7 @@ public final class RecipeSelectScreen extends Screen {
             loadRecipes();
         }
         Layout layout = layout();
+        this.resultWidgets.clear();
         this.visibleRows.clear();
         this.searchBox = new EditBox(this.font, layout.left + 8, layout.top + 58,
                 layout.listWidth - 16, 20, Component.translatable("gui.avaritia_tweak.search"));
@@ -56,47 +61,31 @@ public final class RecipeSelectScreen extends Screen {
         this.searchBox.setResponder(this::filter);
         this.addRenderableWidget(this.searchBox);
 
-        int pageSize = pageSize(layout);
-        int maxPage = maxPage(pageSize);
-        this.page = Math.min(this.page, maxPage);
-        int start = this.page * pageSize;
-        for (int index = start; index < Math.min(this.filteredRecipes.size(), start + pageSize); index++) {
-            Recipe<?> recipe = this.filteredRecipes.get(index);
-            int y = layout.listTop + (index - start) * 22;
-            String id = ScreenText.fit(this.font, recipe.getId().toString(), layout.listWidth - 58);
-            this.addRenderableWidget(EditorButton.builder(Component.literal(id), button -> {
-                        this.selected = recipe;
-                        rebuild();
-                    }).bounds(layout.left + 34, y, layout.listWidth - 42, 20)
-                    .style(EditorButton.Style.LIST).selected(recipe == this.selected).build());
-            this.visibleRows.add(new RecipeRow(recipe, layout.left + 10, y + 1));
-        }
-
         int actionY = layout.top + layout.height - 30;
-        this.addRenderableWidget(EditorButton.builder(Component.literal("<"), button -> {
+        this.previousPage = this.addRenderableWidget(EditorButton.builder(Component.literal("<"), button -> {
             this.page = Math.max(0, this.page - 1);
-            rebuild();
+            requestResultRefresh();
         }).bounds(layout.left + 8, actionY, 34, 20).style(EditorButton.Style.QUIET).build());
-        this.addRenderableWidget(EditorButton.builder(Component.literal(">"), button -> {
-            this.page = Math.min(maxPage(pageSize), this.page + 1);
-            rebuild();
+        this.nextPage = this.addRenderableWidget(EditorButton.builder(Component.literal(">"), button -> {
+            this.page = Math.min(maxPage(pageSize(layout)), this.page + 1);
+            requestResultRefresh();
         }).bounds(layout.left + layout.listWidth - 42, actionY, 34, 20)
                 .style(EditorButton.Style.QUIET).build());
 
         int detailX = layout.detailX;
         int detailWidth = layout.detailWidth;
         int cancelWidth = Math.min(84, detailWidth / 2 - 3);
-        EditorButton importButton = this.addRenderableWidget(EditorButton.builder(
+        this.importButton = this.addRenderableWidget(EditorButton.builder(
                         Component.translatable("gui.avaritia_tweak.import_recipe"),
                         button -> importSelected())
                 .bounds(detailX + cancelWidth + 5, actionY,
                         detailWidth - cancelWidth - 5, 20)
                 .style(EditorButton.Style.PRIMARY).build());
-        importButton.active = this.selected != null;
         this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.avaritia_tweak.cancel"),
                         button -> onClose())
                 .bounds(detailX, actionY, cancelWidth, 20)
                 .style(EditorButton.Style.QUIET).build());
+        refreshResults();
         this.setInitialFocus(this.searchBox);
         this.searchBox.setCursorPosition(this.query.length());
     }
@@ -124,15 +113,7 @@ public final class RecipeSelectScreen extends Screen {
                 .forEach(this.filteredRecipes::add);
         this.page = 0;
         this.selected = null;
-        if (!this.rebuildQueued) {
-            this.rebuildQueued = true;
-            Minecraft.getInstance().execute(() -> {
-                this.rebuildQueued = false;
-                if (Minecraft.getInstance().screen == this) {
-                    rebuild();
-                }
-            });
-        }
+        requestResultRefresh();
     }
 
     private void importSelected() {
@@ -152,9 +133,34 @@ public final class RecipeSelectScreen extends Screen {
         return recipe.getResultItem(Minecraft.getInstance().level.registryAccess());
     }
 
-    private void rebuild() {
-        this.clearWidgets();
-        this.init();
+    private void refreshResults() {
+        this.resultWidgets.forEach(this::removeWidget);
+        this.resultWidgets.clear();
+        this.visibleRows.clear();
+        Layout layout = layout();
+        int pageSize = pageSize(layout);
+        int maxPage = maxPage(pageSize);
+        this.page = Math.min(this.page, maxPage);
+        int start = this.page * pageSize;
+        for (int index = start; index < Math.min(this.filteredRecipes.size(), start + pageSize); index++) {
+            Recipe<?> recipe = this.filteredRecipes.get(index);
+            int y = layout.listTop + (index - start) * 22;
+            String id = ScreenText.fit(this.font, recipe.getId().toString(), layout.listWidth - 58);
+            EditorButton row = EditorButton.builder(Component.literal(id), button -> {
+                        this.selected = recipe;
+                        requestResultRefresh();
+                    }).bounds(layout.left + 34, y, layout.listWidth - 42, 20)
+                    .style(EditorButton.Style.LIST).selected(recipe == this.selected).build();
+            this.resultWidgets.add(this.addRenderableWidget(row));
+            this.visibleRows.add(new RecipeRow(recipe, layout.left + 10, y + 1));
+        }
+        this.previousPage.active = this.page > 0;
+        this.nextPage.active = this.page < maxPage;
+        this.importButton.active = this.selected != null;
+    }
+
+    private void requestResultRefresh() {
+        this.searchRefresh.request(this, this::refreshResults);
     }
 
     @Override
@@ -164,9 +170,12 @@ public final class RecipeSelectScreen extends Screen {
             return false;
         }
         int pageSize = pageSize(layout);
-        this.page = Math.max(0, Math.min(maxPage(pageSize),
+        int next = Math.max(0, Math.min(maxPage(pageSize),
                 this.page + (delta < 0 ? 1 : -1)));
-        rebuild();
+        if (next != this.page) {
+            this.page = next;
+            requestResultRefresh();
+        }
         return true;
     }
 
@@ -254,10 +263,11 @@ public final class RecipeSelectScreen extends Screen {
     }
 
     private Layout layout() {
-        int panelWidth = Math.min(720, this.width - 12);
-        int panelHeight = Math.min(390, this.height - 12);
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
+        EditorUiScale.Frame frame = EditorUiScale.fit(this.width, this.height, 720, 390);
+        int panelWidth = frame.width();
+        int panelHeight = frame.height();
+        int left = frame.left();
+        int top = frame.top();
         int listWidth = Math.max(210, Math.min(410, panelWidth * 3 / 5));
         int detailX = left + listWidth + 10;
         int detailWidth = panelWidth - listWidth - 18;
