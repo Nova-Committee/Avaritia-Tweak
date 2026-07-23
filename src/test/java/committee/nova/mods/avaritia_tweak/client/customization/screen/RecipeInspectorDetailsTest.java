@@ -1,5 +1,6 @@
 package committee.nova.mods.avaritia_tweak.client.customization.screen;
 
+import committee.nova.mods.avaritia_tweak.client.customization.importers.RecipeImportResult;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.EntryKind;
@@ -97,6 +98,27 @@ class RecipeInspectorDetailsTest {
         assertThatThrownBy(() -> RecipeInspectorDetails.from(definition))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("SINGULARITY_DEFINITION");
+    }
+
+    @Test
+    void failedInspectionCannotTriggerImport() {
+        CustomizationEntry entry = new CustomizationEntry.Compressor(
+                id("test:valid"), OutputTarget.KUBEJS, item("minecraft:stone"), result(), 1, 1);
+        RecipeImportResult.Failure failure = new RecipeImportResult.Failure(
+                id("test:failed"), "addition", "ingredient.custom.unsupported", "unsupported");
+
+        assertThat(RecipeSelectScreen.canImport(Optional.empty())).isFalse();
+        assertThat(RecipeSelectScreen.canImport(Optional.of(failure))).isFalse();
+        assertThat(RecipeSelectScreen.canImport(Optional.of(new RecipeImportResult.Success(entry)))).isTrue();
+    }
+
+    @Test
+    void choiceDescriptionKeepsEveryAlternativeVisible() {
+        IngredientSpec choice = new IngredientSpec.Choice(List.of(
+                item("minecraft:stone"), tag("forge:gems/diamond")));
+
+        assertThat(GhostIngredientButton.describe(choice))
+                .isEqualTo("OR: minecraft:stone | #forge:gems/diamond");
     }
 
     private static IngredientSpec item(String value) {

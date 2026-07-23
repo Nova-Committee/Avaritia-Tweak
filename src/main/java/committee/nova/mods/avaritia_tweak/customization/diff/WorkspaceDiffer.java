@@ -115,6 +115,11 @@ public final class WorkspaceDiffer {
     }
 
     private static String ingredient(IngredientSpec ingredient) {
+        if (ingredient instanceof IngredientSpec.Choice choice) {
+            return choice.alternatives().stream()
+                    .map(WorkspaceDiffer::ingredient)
+                    .collect(java.util.stream.Collectors.joining(" | ", "(", ")"));
+        }
         if (ingredient instanceof IngredientSpec.Tag tag) {
             return "#" + tag.tagId();
         }

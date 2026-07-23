@@ -2,7 +2,7 @@ package committee.nova.mods.avaritia_tweak.customization.render;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
@@ -68,27 +68,8 @@ public final class SingularityDatapackRenderer implements ArtifactRenderer {
         return json;
     }
 
-    static JsonObject ingredient(IngredientSpec ingredient) {
-        JsonObject json = new JsonObject();
-        if (ingredient instanceof IngredientSpec.Tag tag) {
-            json.addProperty("tag", tag.tagId().toString());
-            return json;
-        }
-        IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
-        item.strictNbt().ifPresent(nbt -> {
-            JsonObject components = new JsonObject();
-            JsonArray items = new JsonArray();
-            items.add(item.itemId().toString());
-            components.addProperty("minecraft:custom_data", NbtText.canonical(nbt));
-            json.addProperty("type", "neoforge:components");
-            json.add("items", items);
-            json.add("components", components);
-            json.addProperty("strict", true);
-        });
-        if (item.strictNbt().isEmpty()) {
-            json.addProperty("item", item.itemId().toString());
-        }
-        return json;
+    static JsonElement ingredient(IngredientSpec ingredient) {
+        return IngredientJson.encode(ingredient);
     }
 
 }

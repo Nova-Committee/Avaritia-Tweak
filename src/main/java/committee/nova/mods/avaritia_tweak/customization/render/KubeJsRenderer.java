@@ -1,5 +1,8 @@
 package committee.nova.mods.avaritia_tweak.customization.render;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
@@ -19,6 +22,7 @@ public final class KubeJsRenderer implements ArtifactRenderer {
     public static final ArtifactPath PATH = ArtifactPath.of(
             "kubejs/server_scripts/avaritia_tweak_generated.js");
     private static final List<Character> SHAPED_SYMBOLS = shapedSymbols();
+    private static final Gson JSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
     @Override
     public Set<OutputTarget> supportedTargets() {
@@ -124,12 +128,7 @@ public final class KubeJsRenderer implements ArtifactRenderer {
                     .append("        .timeCost(").append(compressor.timeCost()).append(")\n")
                     .append("        .id(").append(ScriptEscaper.quote(compressor.id().toString())).append(");\n");
         } else if (entry instanceof CustomizationEntry.ExtremeSmithing smithing) {
-            script.append("    avaritia.extreme_smithing(\n")
-                    .append("        ").append(itemStack(smithing.result())).append(",\n")
-                    .append("        ").append(ingredient(smithing.template())).append(",\n")
-                    .append("        ").append(ingredient(smithing.base())).append(",\n")
-                    .append("        ").append(ingredient(smithing.addition())).append("\n")
-                    .append("    ).id(").append(ScriptEscaper.quote(smithing.id().toString())).append(");\n");
+            renderExtremeSmithing(script, smithing);
         } else if (entry instanceof CustomizationEntry.InfinityCatalyst catalyst) {
             script.append("    avaritia.infinity_catalyst(\n")
                     .append("        ").append(ScriptEscaper.quote(catalyst.group())).append(",\n");
@@ -144,6 +143,34 @@ public final class KubeJsRenderer implements ArtifactRenderer {
         } else {
             throw new IllegalArgumentException("Unsupported KubeJS recipe entry: " + entry.kind());
         }
+    }
+
+    private static void renderExtremeSmithing(StringBuilder script,
+                                               CustomizationEntry.ExtremeSmithing smithing) {
+        if (isPlainItem(smithing.template()) && isPlainItem(smithing.base())
+                && isPlainItem(smithing.addition())) {
+            script.append("    avaritia.extreme_smithing(\n")
+                    .append("        ").append(itemStack(smithing.result())).append(",\n")
+                    .append("        ").append(ingredient(smithing.template())).append(",\n")
+                    .append("        ").append(ingredient(smithing.base())).append(",\n")
+                    .append("        ").append(ingredient(smithing.addition())).append("\n")
+                    .append("    ).id(").append(ScriptEscaper.quote(smithing.id().toString())).append(");\n");
+            return;
+        }
+
+        JsonObject recipe = new JsonObject();
+        recipe.addProperty("type", "avaritia:extreme_smithing");
+        recipe.add("template", IngredientJson.encode(smithing.template()));
+        recipe.add("base", IngredientJson.encode(smithing.base()));
+        recipe.add("addition", IngredientJson.encode(smithing.addition()));
+        recipe.add("result", IngredientJson.stack(smithing.result()));
+        String encoded = JSON.toJson(recipe).replace("\n", "\n    ");
+        script.append("    event.custom(").append(encoded).append(")\n")
+                .append("        .id(").append(ScriptEscaper.quote(smithing.id().toString())).append(");\n");
+    }
+
+    private static boolean isPlainItem(IngredientSpec ingredient) {
+        return ingredient instanceof IngredientSpec.Item item && item.strictNbt().isEmpty();
     }
 
     private static void renderShaped(StringBuilder script, CustomizationEntry.ShapedTable shaped) {
@@ -220,6 +247,11 @@ public final class KubeJsRenderer implements ArtifactRenderer {
     }
 
     static String ingredient(IngredientSpec ingredient) {
+        if (ingredient instanceof IngredientSpec.Choice choice) {
+            return "Ingredient.of([" + choice.alternatives().stream()
+                    .map(KubeJsRenderer::ingredient)
+                    .collect(java.util.stream.Collectors.joining(", ")) + "])";
+        }
         if (ingredient instanceof IngredientSpec.Tag tag) {
             return ScriptEscaper.quote("#" + tag.tagId());
         }

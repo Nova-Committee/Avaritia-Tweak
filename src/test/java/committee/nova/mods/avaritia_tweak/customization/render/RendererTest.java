@@ -97,7 +97,7 @@ class RendererTest {
         nbt.putInt("value", 7);
         IngredientSpec.Item strict = new IngredientSpec.Item(id("minecraft:stone"), Optional.of(nbt));
 
-        com.google.gson.JsonObject json = SingularityDatapackRenderer.ingredient(strict);
+        com.google.gson.JsonObject json = SingularityDatapackRenderer.ingredient(strict).getAsJsonObject();
         Ingredient decoded = Ingredient.CODEC
                 .parse(RegistryOps.create(JsonOps.INSTANCE,
                         RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), json)
@@ -113,6 +113,36 @@ class RendererTest {
         assertThat(decoded.test(exact)).isTrue();
         assertThat(decoded.test(changed)).isFalse();
         assertThat(SingularityDatapackRenderer.PACK_FORMAT).isEqualTo(48);
+    }
+
+    @Test
+    void rendersChoiceIngredientsWithoutDroppingAlternatives() {
+        IngredientSpec.Choice choice = new IngredientSpec.Choice(List.of(
+                item("minecraft:stone"), item("minecraft:dirt")));
+        CustomizationEntry.ExtremeSmithing kubeRecipe = new CustomizationEntry.ExtremeSmithing(
+                id("test:choice"), OutputTarget.KUBEJS, item("minecraft:stone"),
+                item("minecraft:diamond"), choice, result());
+        CustomizationEntry.ExtremeSmithing craftTweakerRecipe = new CustomizationEntry.ExtremeSmithing(
+                id("test:choice"), OutputTarget.CRAFTTWEAKER, item("minecraft:stone"),
+                item("minecraft:diamond"), choice, result());
+
+        String js = new KubeJsRenderer().render(snapshot(kubeRecipe)).get(0).text();
+        String zs = new CraftTweakerRenderer().render(snapshot(craftTweakerRecipe)).get(0).text();
+        com.google.gson.JsonElement encoded = SingularityDatapackRenderer.ingredient(choice);
+        Ingredient decoded = Ingredient.CODEC.parse(
+                RegistryOps.create(JsonOps.INSTANCE,
+                        RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), encoded)
+                .getOrThrow();
+
+        assertThat(js).contains("event.custom({", "\"type\": \"avaritia:extreme_smithing\"",
+                "\"addition\": [", "\"item\": \"minecraft:stone\"",
+                "\"item\": \"minecraft:dirt\"");
+        assertThat(KubeJsRenderer.ingredient(choice))
+                .isEqualTo("Ingredient.of([\"minecraft:stone\", \"minecraft:dirt\"])");
+        assertThat(zs).contains("(<item:minecraft:stone> | <item:minecraft:dirt>)");
+        assertThat(decoded.test(new ItemStack(Items.STONE))).isTrue();
+        assertThat(decoded.test(new ItemStack(Items.DIRT))).isTrue();
+        assertThat(decoded.test(new ItemStack(Items.DIAMOND))).isFalse();
     }
 
     @Test
@@ -191,7 +221,7 @@ class RendererTest {
                         item("minecraft:stone"), result(), 1000, 240),
                 new CustomizationEntry.ExtremeSmithing(id("test:smithing"), target,
                         item("minecraft:stone"), item("minecraft:diamond"),
-                        tag("forge:ingots/iron"), result()),
+                        item("minecraft:netherite_ingot"), result()),
                 new CustomizationEntry.InfinityCatalyst(id("test:catalyst"), target, "default",
                         List.of(item("minecraft:stone")), 2),
                 new CustomizationEntry.EternalSingularity(id("test:eternal"), target,

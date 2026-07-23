@@ -8,6 +8,7 @@ import committee.nova.mods.avaritia.common.crafting.recipe.ShapedTableCraftingRe
 import committee.nova.mods.avaritia.common.crafting.recipe.ShapelessTableCraftingRecipe;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
+import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
 import net.minecraft.core.NonNullList;
@@ -18,6 +19,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
+import net.neoforged.neoforge.common.crafting.CompoundIngredient;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -59,7 +61,7 @@ class AvaritiaRecipeImporterTest {
                 ingredients(stone(), dirt()), ItemStack.EMPTY, 3);
         CompressorRecipe compressor = new CompressorRecipe(stone(), ItemStack.EMPTY, 800, 120);
         ExtremeSmithingRecipe smithing = new ExtremeSmithingRecipe(
-                stone(), dirt(), stone(), ItemStack.EMPTY);
+                stone(), dirt(), CompoundIngredient.of(stone(), dirt()), ItemStack.EMPTY);
 
         CustomizationEntry.ShapedTable importedShaped = (CustomizationEntry.ShapedTable)
                 success("test:shaped", shaped);
@@ -82,7 +84,10 @@ class AvaritiaRecipeImporterTest {
         assertThat(importedShapeless.ingredients()).hasSize(2);
         assertThat(importedCompressor.inputCount()).isEqualTo(800);
         assertThat(importedCompressor.timeCost()).isEqualTo(120);
-        assertThat(importedSmithing.addition()).isNotNull();
+        assertThat(importedSmithing.addition()).isInstanceOfSatisfying(IngredientSpec.Choice.class,
+                choice -> assertThat(choice.alternatives()).containsExactly(
+                        new IngredientSpec.Item(id("minecraft:stone")),
+                        new IngredientSpec.Item(id("minecraft:dirt"))));
         assertThat(importedCatalyst.group()).isEqualTo("custom");
         assertThat(importedCatalyst.count()).isEqualTo(3);
         assertThat(importedCatalyst.ingredients()).hasSize(2);

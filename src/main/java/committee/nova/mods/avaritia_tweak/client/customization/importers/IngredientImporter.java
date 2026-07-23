@@ -10,6 +10,8 @@ import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.Ingredient;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public final class IngredientImporter {
@@ -26,8 +28,28 @@ public final class IngredientImporter {
 
     IngredientImportResult importSerialized(JsonElement serialized, String fieldPath) {
         if (serialized.isJsonArray()) {
-            return failure(fieldPath, "ingredient.or.unsupported",
-                    "Multiple-choice and empty ingredients are not supported");
+            JsonArray encodedAlternatives = serialized.getAsJsonArray();
+            if (encodedAlternatives.size() == 0) {
+                return failure(fieldPath, "ingredient.empty.unsupported",
+                        "Empty ingredients are not supported");
+            }
+            List<IngredientSpec> alternatives = new ArrayList<>();
+            for (int index = 0; index < encodedAlternatives.size(); index++) {
+                IngredientImportResult imported = importSerialized(encodedAlternatives.get(index),
+                        fieldPath + "[" + index + "]");
+                if (imported instanceof IngredientImportResult.Failure) {
+                    return imported;
+                }
+                IngredientSpec ingredient = ((IngredientImportResult.Success) imported).ingredient();
+                if (ingredient instanceof IngredientSpec.Choice nested) {
+                    alternatives.addAll(nested.alternatives());
+                } else {
+                    alternatives.add(ingredient);
+                }
+            }
+            return new IngredientImportResult.Success(alternatives.size() == 1
+                    ? alternatives.getFirst()
+                    : new IngredientSpec.Choice(alternatives));
         }
         if (!serialized.isJsonObject()) {
             return failure(fieldPath, "ingredient.format.unsupported",
@@ -42,7 +64,10 @@ public final class IngredientImporter {
             }
             return switch (type) {
                 case "neoforge:components" -> importComponentIngredient(json, fieldPath);
+                case "neoforge:compound" -> importCompoundIngredient(json, fieldPath);
                 case "forge:nbt" -> importLegacyNbtIngredient(json, fieldPath);
+                case "avaritia:stack" -> importAvaritiaStackIngredient(json, fieldPath);
+                case "avaritia:nbt_item" -> importAvaritiaItemIngredient(json, fieldPath);
                 default -> failure(fieldPath, "ingredient.custom.unsupported",
                         "Unsupported custom ingredient type " + type);
             };
@@ -60,6 +85,40 @@ public final class IngredientImporter {
         return new IngredientImportResult.Success(hasItem
                 ? new IngredientSpec.Item(id)
                 : new IngredientSpec.Tag(id));
+    }
+
+    private IngredientImportResult importCompoundIngredient(JsonObject json, String fieldPath) {
+        if (!json.has("ingredients") || !json.get("ingredients").isJsonArray()) {
+            return failure(fieldPath, "ingredient.compound.invalid",
+                    "Compound ingredient requires an ingredients array");
+        }
+        return importSerialized(json.get("ingredients"), fieldPath);
+    }
+
+    private static IngredientImportResult importAvaritiaStackIngredient(JsonObject json,
+                                                                         String fieldPath) {
+        if (!json.has("item") || !json.get("item").isJsonObject()) {
+            return failure(fieldPath, "ingredient.avaritia_stack.invalid",
+                    "Avaritia stack ingredient requires an item stack object");
+        }
+        ResourceLocation itemId = resourceLocation(json.getAsJsonObject("item"), "id");
+        if (itemId == null) {
+            return failure(fieldPath, "ingredient.id.invalid",
+                    "Avaritia stack ingredient item ID is invalid");
+        }
+        // Re-Avaritia 1.21 StackIngredient#test delegates to ItemStack.isSameItem,
+        // so count and components do not participate in matching.
+        return new IngredientImportResult.Success(new IngredientSpec.Item(itemId));
+    }
+
+    private static IngredientImportResult importAvaritiaItemIngredient(JsonObject json,
+                                                                        String fieldPath) {
+        ResourceLocation itemId = resourceLocation(json, "item");
+        if (itemId == null) {
+            return failure(fieldPath, "ingredient.id.invalid",
+                    "Avaritia item ingredient ID is invalid");
+        }
+        return new IngredientImportResult.Success(new IngredientSpec.Item(itemId));
     }
 
     private static IngredientImportResult importComponentIngredient(JsonObject json, String fieldPath) {

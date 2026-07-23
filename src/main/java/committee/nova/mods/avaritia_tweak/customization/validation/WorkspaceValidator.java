@@ -158,7 +158,12 @@ public final class WorkspaceValidator {
 
     private void validateIngredient(EntryKey key, String field, IngredientSpec ingredient,
                                     List<ValidationIssue> issues) {
-        if (ingredient instanceof IngredientSpec.Item item) {
+        if (ingredient instanceof IngredientSpec.Choice choice) {
+            for (int index = 0; index < choice.alternatives().size(); index++) {
+                validateIngredient(key, field + ".alternatives[" + index + "]",
+                        choice.alternatives().get(index), issues);
+            }
+        } else if (ingredient instanceof IngredientSpec.Item item) {
             if (this.registryLookup.itemMaxStackSize(item.itemId()).isEmpty()) {
                 issues.add(ValidationIssue.error(key, field + ".itemId", "validation.item.missing",
                         item.itemId().toString()));

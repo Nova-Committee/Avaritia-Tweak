@@ -187,7 +187,11 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
         if (this.selectedInspection.isEmpty()) {
             return;
         }
-        this.onImported.accept(this.selectedInspection.orElseThrow());
+        RecipeImportResult inspection = this.selectedInspection.orElseThrow();
+        if (!(inspection instanceof RecipeImportResult.Success)) {
+            return;
+        }
+        this.onImported.accept(inspection);
         Minecraft.getInstance().setScreen(this.previous);
     }
 
@@ -233,7 +237,11 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
         }
         this.previousPage.active = this.page > 0;
         this.nextPage.active = this.page < maxPage;
-        this.importButton.active = this.selected != null && this.selectedInspection.isPresent();
+        this.importButton.active = this.selected != null && canImport(this.selectedInspection);
+    }
+
+    static boolean canImport(Optional<RecipeImportResult> inspection) {
+        return inspection.filter(RecipeImportResult.Success.class::isInstance).isPresent();
     }
 
     private void requestResultRefresh() {

@@ -195,7 +195,10 @@ public final class WorkspaceCodec {
 
     private static JsonObject ingredient(IngredientSpec ingredient) {
         JsonObject json = new JsonObject();
-        if (ingredient instanceof IngredientSpec.Tag tag) {
+        if (ingredient instanceof IngredientSpec.Choice choice) {
+            json.addProperty("type", "choice");
+            json.add("alternatives", ingredients(choice.alternatives()));
+        } else if (ingredient instanceof IngredientSpec.Tag tag) {
             json.addProperty("type", "tag");
             json.addProperty("id", tag.tagId().toString());
         } else {
@@ -209,16 +212,36 @@ public final class WorkspaceCodec {
 
     private static IngredientSpec ingredient(JsonObject json, String path) {
         String type = string(json, "type", path + ".type");
-        ResourceLocation id = resourceLocation(string(json, "id", path + ".id"), path + ".id");
         return switch (type) {
-            case "item" -> new IngredientSpec.Item(id, optionalString(json, "strictNbt")
+            case "item" -> new IngredientSpec.Item(
+                    resourceLocation(string(json, "id", path + ".id"), path + ".id"),
+                    optionalString(json, "strictNbt")
                     .map(value -> nbt(value, path + ".strictNbt")));
             case "tag" -> {
                 if (json.has("strictNbt")) {
                     throw failure("workspace.ingredient.tag_nbt", path + ".strictNbt",
                             "Tags cannot carry strict NBT");
                 }
-                yield new IngredientSpec.Tag(id);
+                yield new IngredientSpec.Tag(
+                        resourceLocation(string(json, "id", path + ".id"), path + ".id"));
+            }
+            case "choice" -> {
+                JsonArray alternatives = array(json, "alternatives", path + ".alternatives");
+                if (alternatives.size() < 2) {
+                    throw failure("workspace.ingredient.choice.size", path + ".alternatives",
+                            "Choice ingredients require at least two alternatives");
+                }
+                List<IngredientSpec> decoded = new ArrayList<>();
+                for (int index = 0; index < alternatives.size(); index++) {
+                    String alternativePath = path + ".alternatives[" + index + "]";
+                    JsonElement alternative = alternatives.get(index);
+                    if (!alternative.isJsonObject()) {
+                        throw failure("workspace.ingredient.invalid", alternativePath,
+                                "Choice alternative must be an object");
+                    }
+                    decoded.add(ingredient(alternative.getAsJsonObject(), alternativePath));
+                }
+                yield new IngredientSpec.Choice(decoded);
             }
             default -> throw failure("workspace.ingredient.type", path + ".type",
                     "Unsupported ingredient type " + type);

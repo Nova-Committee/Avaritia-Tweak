@@ -19,7 +19,8 @@ public final class IngredientEditorScreen extends ThemedEditorScreen {
 
     private final Screen previous;
     private final Consumer<Optional<IngredientSpec>> onSave;
-    private boolean tagMode;
+    private Mode mode = Mode.ITEM;
+    private IngredientSpec.Choice importedChoice;
     private String idText = "";
     private String nbtText = "";
     private EditBox idBox;
@@ -31,13 +32,17 @@ public final class IngredientEditorScreen extends ThemedEditorScreen {
         super(Component.translatable("gui.avaritia_tweak.ingredient_editor"));
         this.previous = previous;
         this.onSave = onSave;
-        this.tagMode = initial.filter(IngredientSpec.Tag.class::isInstance).isPresent();
         initial.ifPresent(value -> {
             if (value instanceof IngredientSpec.Item item) {
+                this.mode = Mode.ITEM;
                 this.idText = item.itemId().toString();
                 this.nbtText = item.strictNbt().map(Object::toString).orElse("");
-            } else {
-                this.idText = ((IngredientSpec.Tag) value).tagId().toString();
+            } else if (value instanceof IngredientSpec.Tag tag) {
+                this.mode = Mode.TAG;
+                this.idText = tag.tagId().toString();
+            } else if (value instanceof IngredientSpec.Choice choice) {
+                this.mode = Mode.CHOICE;
+                this.importedChoice = choice;
             }
         });
     }
@@ -48,41 +53,51 @@ public final class IngredientEditorScreen extends ThemedEditorScreen {
         int contentX = layout.left + MODE_RAIL_WIDTH + 12;
         int contentWidth = layout.width - MODE_RAIL_WIDTH - 22;
         int fieldY = layout.top + 66;
-        int browseWidth = this.tagMode ? 0 : Math.min(78, Math.max(54, contentWidth / 4));
-        int idWidth = contentWidth - (this.tagMode ? 0 : browseWidth + 5);
+        if (this.mode != Mode.CHOICE) {
+            boolean tagMode = this.mode == Mode.TAG;
+            int browseWidth = tagMode ? 0 : Math.min(78, Math.max(54, contentWidth / 4));
+            int idWidth = contentWidth - (tagMode ? 0 : browseWidth + 5);
 
-        this.idBox = new EditBox(this.font, contentX, fieldY, idWidth, 20,
-                Component.translatable("gui.avaritia_tweak.resource_id"));
-        this.idBox.setMaxLength(256);
-        this.idBox.setValue(this.idText);
-        this.idBox.setResponder(value -> this.idText = value);
-        this.addRenderableWidget(this.idBox);
+            this.idBox = new EditBox(this.font, contentX, fieldY, idWidth, 20,
+                    Component.translatable("gui.avaritia_tweak.resource_id"));
+            this.idBox.setMaxLength(256);
+            this.idBox.setValue(this.idText);
+            this.idBox.setResponder(value -> this.idText = value);
+            this.addRenderableWidget(this.idBox);
 
-        if (!this.tagMode) {
-            this.addRenderableWidget(EditorButton.builder(
-                            Component.translatable("gui.avaritia_tweak.browse_items"),
-                            button -> Minecraft.getInstance().setScreen(new RegistryItemSelectScreen(this,
-                                    id -> this.idText = id.toString())))
-                    .bounds(contentX + idWidth + 5, fieldY, browseWidth, 20)
-                    .style(EditorButton.Style.QUIET).build());
-            this.nbtBox = new EditBox(this.font, contentX, fieldY + 42, contentWidth, 20,
-                    Component.translatable("gui.avaritia_tweak.strict_nbt"));
-            this.nbtBox.setMaxLength(4096);
-            this.nbtBox.setValue(this.nbtText);
-            this.nbtBox.setResponder(value -> this.nbtText = value);
-            this.addRenderableWidget(this.nbtBox);
+            if (!tagMode) {
+                this.addRenderableWidget(EditorButton.builder(
+                                Component.translatable("gui.avaritia_tweak.browse_items"),
+                                button -> Minecraft.getInstance().setScreen(new RegistryItemSelectScreen(this,
+                                        id -> this.idText = id.toString())))
+                        .bounds(contentX + idWidth + 5, fieldY, browseWidth, 20)
+                        .style(EditorButton.Style.QUIET).build());
+                this.nbtBox = new EditBox(this.font, contentX, fieldY + 42, contentWidth, 20,
+                        Component.translatable("gui.avaritia_tweak.strict_nbt"));
+                this.nbtBox.setMaxLength(4096);
+                this.nbtBox.setValue(this.nbtText);
+                this.nbtBox.setResponder(value -> this.nbtText = value);
+                this.addRenderableWidget(this.nbtBox);
+            }
         }
 
         this.addRenderableWidget(EditorButton.builder(
                         Component.translatable("gui.avaritia_tweak.ingredient_item"),
-                        button -> setMode(false))
+                        button -> setMode(Mode.ITEM))
                 .bounds(layout.left + 9, layout.top + 62, MODE_RAIL_WIDTH - 18, 24)
-                .style(EditorButton.Style.TAB).selected(!this.tagMode).build());
+                .style(EditorButton.Style.TAB).selected(this.mode == Mode.ITEM).build());
         this.addRenderableWidget(EditorButton.builder(
                         Component.translatable("gui.avaritia_tweak.ingredient_tag"),
-                        button -> setMode(true))
+                        button -> setMode(Mode.TAG))
                 .bounds(layout.left + 9, layout.top + 92, MODE_RAIL_WIDTH - 18, 24)
-                .style(EditorButton.Style.TAB).selected(this.tagMode).build());
+                .style(EditorButton.Style.TAB).selected(this.mode == Mode.TAG).build());
+        if (this.importedChoice != null) {
+            this.addRenderableWidget(EditorButton.builder(
+                            Component.translatable("gui.avaritia_tweak.ingredient_choice"),
+                            button -> setMode(Mode.CHOICE))
+                    .bounds(layout.left + 9, layout.top + 122, MODE_RAIL_WIDTH - 18, 24)
+                    .style(EditorButton.Style.TAB).selected(this.mode == Mode.CHOICE).build());
+        }
 
         int actionY = layout.top + layout.height - 30;
         this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.avaritia_tweak.clear"),
@@ -97,11 +112,17 @@ public final class IngredientEditorScreen extends ThemedEditorScreen {
                         button -> save())
                 .bounds(layout.left + layout.width - 90, actionY, 80, 20)
                 .style(EditorButton.Style.PRIMARY).build());
-        this.setInitialFocus(this.idBox);
+        if (this.idBox != null) {
+            this.setInitialFocus(this.idBox);
+        }
     }
 
-    private void setMode(boolean tagMode) {
-        this.tagMode = tagMode;
+    private void setMode(Mode mode) {
+        if (this.mode == Mode.CHOICE && mode != Mode.CHOICE) {
+            this.idText = "";
+            this.nbtText = "";
+        }
+        this.mode = mode;
         this.error = "";
         rebuild();
     }
@@ -112,12 +133,17 @@ public final class IngredientEditorScreen extends ThemedEditorScreen {
     }
 
     private void save() {
+        if (this.mode == Mode.CHOICE && this.importedChoice != null) {
+            this.onSave.accept(Optional.of(this.importedChoice));
+            Minecraft.getInstance().setScreen(this.previous);
+            return;
+        }
         ResourceLocation id = ResourceLocation.tryParse(this.idText.strip());
         if (id == null) {
             this.error = Component.translatable("gui.avaritia_tweak.error.invalid_resource_id").getString();
             return;
         }
-        if (this.tagMode) {
+        if (this.mode == Mode.TAG) {
             this.onSave.accept(Optional.of(new IngredientSpec.Tag(id)));
         } else {
             String rawNbt = this.nbtText.strip();
@@ -163,15 +189,20 @@ public final class IngredientEditorScreen extends ThemedEditorScreen {
         int contentWidth = layout.width - MODE_RAIL_WIDTH - 22;
         EditorTheme.renderCanvasGrid(graphics, contentX - 5, layout.top + 45,
                 contentWidth + 10, layout.height - 88);
-        graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.resource_id"),
-                contentX, layout.top + 54, EditorTheme.TEXT_MUTED, false);
-        if (!this.tagMode) {
+        if (this.mode != Mode.CHOICE) {
+            graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.resource_id"),
+                    contentX, layout.top + 54, EditorTheme.TEXT_MUTED, false);
+        }
+        if (this.mode == Mode.ITEM) {
             graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.strict_nbt"),
                     contentX, layout.top + 96, EditorTheme.TEXT_MUTED, false);
-        } else {
+        } else if (this.mode == Mode.TAG) {
             graphics.drawWordWrap(this.font,
                     Component.translatable("gui.avaritia_tweak.ingredient_tag.help"),
                     contentX, layout.top + 100, contentWidth, EditorTheme.TEXT_FAINT);
+        } else {
+            renderChoice(graphics, contentX, layout.top + 54, contentWidth,
+                    layout.top + layout.height - 48);
         }
         if (!this.error.isEmpty()) {
             graphics.drawString(this.font, ScreenText.fit(this.font, this.error, contentWidth),
@@ -192,6 +223,30 @@ public final class IngredientEditorScreen extends ThemedEditorScreen {
     @Override
     public void onClose() {
         Minecraft.getInstance().setScreen(this.previous);
+    }
+
+    private void renderChoice(GuiGraphics graphics, int x, int y, int width, int bottom) {
+        graphics.drawString(this.font,
+                Component.translatable("gui.avaritia_tweak.ingredient_choice"),
+                x, y, EditorTheme.AVARITIA_GOLD, false);
+        graphics.drawWordWrap(this.font,
+                Component.translatable("gui.avaritia_tweak.ingredient_choice.help"),
+                x, y + 13, width, EditorTheme.TEXT_FAINT);
+        int lineY = y + 36;
+        for (int index = 0; index < this.importedChoice.alternatives().size()
+                && lineY + 9 <= bottom; index++) {
+            String value = (index + 1) + ". "
+                    + GhostIngredientButton.describe(this.importedChoice.alternatives().get(index));
+            graphics.drawString(this.font, ScreenText.fit(this.font, value, width),
+                    x, lineY, EditorTheme.TEXT, false);
+            lineY += 11;
+        }
+    }
+
+    private enum Mode {
+        ITEM,
+        TAG,
+        CHOICE
     }
 
     private record Layout(int left, int top, int width, int height) {

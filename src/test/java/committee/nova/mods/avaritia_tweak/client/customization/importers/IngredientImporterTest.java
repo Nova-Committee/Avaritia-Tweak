@@ -1,12 +1,14 @@
 package committee.nova.mods.avaritia_tweak.client.customization.importers;
 
 import com.google.gson.JsonParser;
+import committee.nova.mods.avaritia.common.ingredient.StackIngredient;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.common.crafting.CompoundIngredient;
 import net.neoforged.neoforge.common.crafting.DataComponentIngredient;
 import org.junit.jupiter.api.Test;
 
@@ -69,7 +71,27 @@ class IngredientImporterTest {
     }
 
     @Test
-    void rejectsMultipleChoiceAndUnknownCustomIngredientsWithFieldLocation() {
+    void importsRuntimeCompoundAndAvaritiaStackIngredients() {
+        Ingredient compound = CompoundIngredient.of(Ingredient.of(Items.STONE), Ingredient.of(Items.DIRT));
+        Ingredient stack = new StackIngredient(new net.minecraft.world.item.ItemStack(Items.DIAMOND))
+                .toVanilla();
+
+        IngredientImportResult compoundResult = this.importer.importIngredient(compound, "addition");
+        IngredientImportResult stackResult = this.importer.importIngredient(stack, "ingredients[0]");
+
+        assertThat(compoundResult).isInstanceOfSatisfying(IngredientImportResult.Success.class, success ->
+                assertThat(((IngredientSpec.Choice) success.ingredient()).alternatives())
+                        .containsExactly(new IngredientSpec.Item(net.minecraft.resources.ResourceLocation.tryParse(
+                                        "minecraft:stone")),
+                                new IngredientSpec.Item(net.minecraft.resources.ResourceLocation.tryParse(
+                                        "minecraft:dirt"))));
+        assertThat(stackResult).isInstanceOfSatisfying(IngredientImportResult.Success.class, success ->
+                assertThat(success.ingredient()).isEqualTo(new IngredientSpec.Item(
+                        net.minecraft.resources.ResourceLocation.tryParse("minecraft:diamond"))));
+    }
+
+    @Test
+    void importsMultipleChoiceAndStillRejectsUnknownCustomIngredientsWithFieldLocation() {
         IngredientImportResult multiple = importJson("""
                 [{"item":"minecraft:stone"},{"item":"minecraft:dirt"}]
                 """);
@@ -83,10 +105,12 @@ class IngredientImporterTest {
                 {"type":"neoforge:components","items":"minecraft:stone","components":{"minecraft:custom_data":"{value:1}"}}
                 """);
 
-        assertThat(multiple).isInstanceOfSatisfying(IngredientImportResult.Failure.class, failure -> {
-            assertThat(failure.fieldPath()).isEqualTo("ingredients[3]");
-            assertThat(failure.code()).isEqualTo("ingredient.or.unsupported");
-        });
+        assertThat(multiple).isInstanceOfSatisfying(IngredientImportResult.Success.class, success ->
+                assertThat(((IngredientSpec.Choice) success.ingredient()).alternatives())
+                        .containsExactly(new IngredientSpec.Item(net.minecraft.resources.ResourceLocation.tryParse(
+                                        "minecraft:stone")),
+                                new IngredientSpec.Item(net.minecraft.resources.ResourceLocation.tryParse(
+                                        "minecraft:dirt"))));
         assertThat(custom).isInstanceOfSatisfying(IngredientImportResult.Failure.class, failure -> {
             assertThat(failure.fieldPath()).isEqualTo("ingredients[3]");
             assertThat(failure.code()).isEqualTo("ingredient.custom.unsupported");
