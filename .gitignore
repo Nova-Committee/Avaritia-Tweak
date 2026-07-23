@@ -1,10 +1,38 @@
-# AI tooling and agent configuration
-/.agents/
-/.codegraph/
-/.codex/
-/.spec-workflow/
-/.trellis/
-/AGENTS.md
+# AI tooling, agent instructions, and local AI workspaces
+**/.agents/
+**/.ai/
+**/.aider/
+**/.aider.conf.yml
+**/.aider.chat.history.md
+**/.aider.input.history
+**/.amazonq/
+**/.claude/
+**/.cline/
+**/.clinerules
+**/.codegraph/
+**/.codex/
+**/.continue/
+**/.cursor/
+**/.cursorignore
+**/.cursorrules
+**/.gemini/
+**/.junie/
+**/.kiro/
+**/.roo/
+**/.roomodes
+**/.spec-workflow/
+**/.trellis/
+**/.windsurf/
+**/.windsurfrules
+**/AGENTS.md
+**/AGENTS.override.md
+**/CLAUDE.md
+**/CLAUDE.local.md
+**/GEMINI.md
+**/.github/agents/
+**/.github/copilot-instructions.md
+**/.github/instructions/
+**/.github/prompts/
 
 # Gradle and Forge generated directories
 /.gradle/
