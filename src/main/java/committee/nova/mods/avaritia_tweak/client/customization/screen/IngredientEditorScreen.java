@@ -53,6 +53,8 @@ public final class IngredientEditorScreen extends ThemedEditorScreen {
         int contentX = layout.left + MODE_RAIL_WIDTH + 12;
         int contentWidth = layout.width - MODE_RAIL_WIDTH - 22;
         int fieldY = layout.top + 66;
+        this.idBox = null;
+        this.nbtBox = null;
         if (this.mode != Mode.CHOICE) {
             boolean tagMode = this.mode == Mode.TAG;
             int browseWidth = tagMode ? 0 : Math.min(78, Math.max(54, contentWidth / 4));
@@ -163,6 +165,7 @@ public final class IngredientEditorScreen extends ThemedEditorScreen {
     }
 
     private void rebuild() {
+        this.setFocused(null);
         this.clearWidgets();
         this.init();
     }
