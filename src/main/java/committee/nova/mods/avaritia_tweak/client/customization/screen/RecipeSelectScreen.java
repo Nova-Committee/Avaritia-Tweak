@@ -10,8 +10,10 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -37,6 +39,7 @@ public final class RecipeSelectScreen extends Screen {
     private EditorButton importButton;
     private Recipe<?> selected;
     private Optional<RecipeImportResult> selectedInspection = Optional.empty();
+    private Optional<ResourceLocation> inventoryOutput = Optional.empty();
     private int page;
     private String query = "";
     private boolean loaded;
@@ -60,10 +63,23 @@ public final class RecipeSelectScreen extends Screen {
         this.visibleRows.clear();
         this.searchBox = new EditBox(this.font, layout.left + 8, layout.top + 58,
                 layout.listWidth - 16, 20, Component.translatable("gui.avaritia_tweak.search"));
+        this.searchBox.setMaxLength(256);
         this.searchBox.setValue(this.query);
         this.searchBox.setHint(Component.translatable("gui.avaritia_tweak.search"));
         this.searchBox.setResponder(this::filter);
         this.addRenderableWidget(this.searchBox);
+
+        int clearWidth = 42;
+        int pickerWidth = Math.max(1, layout.listWidth - 20 - clearWidth);
+        this.addRenderableWidget(EditorButton.builder(inventoryFilterLabel(), button -> openInventoryFilter())
+                .bounds(layout.left + 8, layout.top + 82, pickerWidth, 20)
+                .style(EditorButton.Style.TAB).selected(this.inventoryOutput.isPresent()).build());
+        EditorButton clearInventoryFilter = this.addRenderableWidget(EditorButton.builder(
+                        Component.translatable("gui.avaritia_tweak.recipe_import.inventory_clear"),
+                        button -> clearInventoryFilter())
+                .bounds(layout.left + 12 + pickerWidth, layout.top + 82, clearWidth, 20)
+                .style(EditorButton.Style.QUIET).build());
+        clearInventoryFilter.active = this.inventoryOutput.isPresent();
 
         int actionY = layout.top + layout.height - 30;
         this.previousPage = this.addRenderableWidget(EditorButton.builder(Component.literal("<"), button -> {
@@ -102,23 +118,63 @@ public final class RecipeSelectScreen extends Screen {
                 .filter(this.importer::supports)
                 .sorted(Comparator.comparing(recipe -> recipe.getId().toString()))
                 .forEach(this.allRecipes::add);
-        this.filteredRecipes.addAll(this.allRecipes);
+        updateFilteredRecipes();
     }
 
     private void filter(String value) {
         this.query = value;
-        String normalized = value.strip().toLowerCase(Locale.ROOT);
+        updateFilteredRecipes();
+        resetFilteredSelection();
+        requestResultRefresh();
+    }
+
+    private void updateFilteredRecipes() {
         this.filteredRecipes.clear();
         this.allRecipes.stream()
-                .filter(recipe -> normalized.isEmpty()
-                        || recipe.getId().toString().toLowerCase(Locale.ROOT).contains(normalized)
-                        || result(recipe).getHoverName().getString()
-                        .toLowerCase(Locale.ROOT).contains(normalized))
+                .filter(this::matchesFilters)
                 .forEach(this.filteredRecipes::add);
+    }
+
+    private boolean matchesFilters(Recipe<?> recipe) {
+        ItemStack output = result(recipe);
+        ResourceLocation outputId = output.isEmpty()
+                ? null
+                : ForgeRegistries.ITEMS.getKey(output.getItem());
+        if (this.inventoryOutput.isPresent() && !this.inventoryOutput.get().equals(outputId)) {
+            return false;
+        }
+        return SearchText.matches(this.query, recipe.getId().toString(),
+                outputId == null ? "" : outputId.toString(), output.getHoverName().getString());
+    }
+
+    private void resetFilteredSelection() {
         this.page = 0;
         this.selected = null;
         this.selectedInspection = Optional.empty();
-        requestResultRefresh();
+    }
+
+    private void openInventoryFilter() {
+        Minecraft.getInstance().setScreen(RegistryItemSelectScreen.inventory(this, id -> {
+            this.inventoryOutput = Optional.of(id);
+            updateFilteredRecipes();
+            resetFilteredSelection();
+        }));
+    }
+
+    private void clearInventoryFilter() {
+        this.inventoryOutput = Optional.empty();
+        updateFilteredRecipes();
+        resetFilteredSelection();
+        this.clearWidgets();
+        this.init();
+    }
+
+    private Component inventoryFilterLabel() {
+        return this.inventoryOutput
+                .map(id -> Component.translatable("gui.avaritia_tweak.recipe_import.inventory_selected",
+                        RegistryItemSelectScreen.displayName(id)))
+                .orElseGet(() -> Component.translatable(
+                        "gui.avaritia_tweak.recipe_import.inventory_pick"));
     }
 
     private void importSelected() {
@@ -391,7 +447,7 @@ public final class RecipeSelectScreen extends Screen {
         int listWidth = split.listWidth();
         int detailX = left + listWidth + 10;
         int detailWidth = split.detailWidth();
-        int listTop = top + 84;
+        int listTop = top + 108;
         int detailsBottom = top + panelHeight - 38;
         return new Layout(left, top, panelWidth, panelHeight, listWidth,
                 detailX, detailWidth, listTop, detailsBottom);

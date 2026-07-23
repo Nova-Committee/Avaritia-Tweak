@@ -59,6 +59,14 @@ final class EditorUiScale {
         return new SplitPane(listWidth, Math.max(1, availableWidth - listWidth));
     }
 
+    static int listPageSize(int listTop, int listBottom, int rowHeight, int footerHeight) {
+        if (rowHeight <= 0) {
+            throw new IllegalArgumentException("List row height must be positive");
+        }
+        int availableHeight = Math.max(0, listBottom - listTop - Math.max(0, footerHeight));
+        return Math.max(1, availableHeight / rowHeight);
+    }
+
     record Frame(int left, int top, int width, int height) {
     }
 
@@ -74,6 +82,18 @@ final class EditorUiScale {
                       int resultX, int resultY) {
         boolean outputOverlapsGrid() {
             return this.resultX < this.gridX + this.gridPixels;
+        }
+
+        int slotAt(double mouseX, double mouseY, int gridSize) {
+            double localX = mouseX - this.gridX;
+            double localY = mouseY - this.gridY;
+            if (localX < 0 || localY < 0
+                    || localX >= this.gridPixels || localY >= this.gridPixels) {
+                return -1;
+            }
+            int column = (int) (localX / this.cellSize);
+            int row = (int) (localY / this.cellSize);
+            return row < gridSize && column < gridSize ? row * gridSize + column : -1;
         }
     }
 
