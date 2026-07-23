@@ -46,7 +46,8 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     private static final int PANEL_HEADER_HEIGHT = 18;
     private static final int NAVIGATION_WIDTH = 180;
     private static final int OUTPUT_WIDTH = 224;
-    private static final int ENTRY_PAGE_SIZE = 8;
+    private static final int ENTRY_ROW_HEIGHT = 20;
+    private static final int ENTRY_PAGINATION_HEIGHT = 26;
     private static final int INGREDIENT_PAGE_SIZE = 18;
     private final EditorController controller;
     private final WorkspaceDiffer differ = new WorkspaceDiffer();
@@ -57,6 +58,7 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     private final List<Label> navigationResultLabels = new ArrayList<>();
     private final List<ChangeIndicator> navigationResultIndicators = new ArrayList<>();
     private final DeferredSearchRefresh navigationRefresh = new DeferredSearchRefresh();
+    private final TableIngredientBrush tableBrush = new TableIngredientBrush();
     private EntryForm form;
     private Optional<EntryKey> editingKey = Optional.empty();
     private Panel activePanel;
@@ -79,6 +81,9 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     private String entryQuery = "";
     private int themeButtonX;
     private int themeButtonWidth;
+    private EditorUiScale.ShapedGrid tableGridLayout;
+    private EntryKind tableGridKind;
+    private int lastBrushedSlot = -1;
 
     public CustomizationEditorScreen(RecipeGeneratorMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
@@ -113,6 +118,9 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         this.navigationResultWidgets.clear();
         this.navigationResultLabels.clear();
         this.navigationResultIndicators.clear();
+        this.tableGridLayout = null;
+        this.tableGridKind = null;
+        this.lastBrushedSlot = -1;
         this.wideLayout = EditorUiScale.isWide(this.width, this.height, 680, 300);
         this.panelTop = HEADER_HEIGHT + 2;
         this.panelBottom = this.height - FOOTER_HEIGHT;
@@ -237,8 +245,8 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         int width = this.navigationResultsWidth;
         List<CustomizationEntry> entries = EntryNavigation.search(
                 this.controller.draft().entries().values(), this.entryQuery);
-        int availableRows = Math.max(1, (this.panelBottom - y - 26) / 20);
-        int pageSize = Math.min(ENTRY_PAGE_SIZE, availableRows);
+        int pageSize = EditorUiScale.listPageSize(y, this.panelBottom,
+                ENTRY_ROW_HEIGHT, ENTRY_PAGINATION_HEIGHT);
         int maxPage = Math.max(0, (entries.size() - 1) / pageSize);
         this.entryPage = Math.min(this.entryPage, maxPage);
         int start = this.entryPage * pageSize;
@@ -253,7 +261,7 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
             workspaceDiff.entries().stream().filter(change -> change.key().equals(entry.key())).findFirst()
                     .ifPresent(change -> this.navigationResultIndicators.add(
                             new ChangeIndicator(x + width - 11, rowY + 5, change.type())));
-            y += 20;
+            y += ENTRY_ROW_HEIGHT;
         }
         if (entries.isEmpty()) {
             this.navigationResultLabels.add(new Label(x, y + 4,
@@ -357,11 +365,64 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                 Component.literal(this.form.tier().gridSize() + "×" + this.form.tier().gridSize()),
                 EditorTheme.TEXT_MUTED));
         addTierButton(tierX, y + 10, Math.max(1, x + width - tierX));
+        addTableBrushToolbar(x, y + 34, width);
         if (this.form.kind() == EntryKind.SHAPED_TABLE) {
-            addShapedGrid(x, y + 34, width);
+            addShapedGrid(x, y + 58, width);
         } else {
-            addShapelessGrid(x, y + 34, width);
+            addShapelessGrid(x, y + 58, width);
         }
+    }
+
+    private void addTableBrushToolbar(int x, int y, int width) {
+        int available = Math.max(3, width - 30);
+        int selectWidth = Math.max(1, available * 40 / 100);
+        int fillWidth = Math.max(1, available * 35 / 100);
+        int disableWidth = Math.max(1, available - selectWidth - fillWidth);
+        this.addRenderableWidget(new GhostIngredientButton(x, y + 1,
+                this.tableBrush::selection, button -> openTableBrushSelector()));
+
+        int selectX = x + 22;
+        this.addRenderableWidget(EditorButton.builder(
+                        Component.translatable("gui.avaritia_tweak.brush.select"),
+                        button -> openTableBrushSelector())
+                .bounds(selectX, y, selectWidth, 20)
+                .style(EditorButton.Style.QUIET).selected(this.tableBrush.active()).build());
+        EditorButton fill = this.addRenderableWidget(EditorButton.builder(
+                        Component.translatable("gui.avaritia_tweak.brush.fill_empty"),
+                        button -> fillTableWithBrush())
+                .bounds(selectX + selectWidth + 4, y, fillWidth, 20)
+                .style(EditorButton.Style.PRIMARY).build());
+        fill.active = this.tableBrush.active();
+        EditorButton disable = this.addRenderableWidget(EditorButton.builder(
+                        Component.translatable("gui.avaritia_tweak.brush.disable"),
+                        button -> disableTableBrush())
+                .bounds(selectX + selectWidth + fillWidth + 8, y, disableWidth, 20)
+                .style(EditorButton.Style.QUIET).build());
+        disable.active = this.tableBrush.active();
+    }
+
+    private void openTableBrushSelector() {
+        if (!captureFields()) {
+            return;
+        }
+        Minecraft.getInstance().setScreen(new RegistryItemSelectScreen(this, id -> {
+            this.tableBrush.select(Optional.of(new IngredientSpec.Item(id)));
+            setStatus(Component.translatable("gui.avaritia_tweak.brush.selected",
+                    RegistryItemSelectScreen.displayName(id)).getString(), StatusTone.SUCCESS);
+        }));
+    }
+
+    private void fillTableWithBrush() {
+        int changed = this.tableBrush.fillEmpty(this.form);
+        setStatus(Component.translatable("gui.avaritia_tweak.brush.filled", changed).getString(),
+                changed > 0 ? StatusTone.SUCCESS : StatusTone.MUTED);
+    }
+
+    private void disableTableBrush() {
+        this.tableBrush.clear();
+        setStatus(Component.translatable("gui.avaritia_tweak.brush.disabled").getString(),
+                StatusTone.MUTED);
+        rebuildPreservingFieldText();
     }
 
     private void addShapedEditor(int x, int y, int width) {
@@ -369,7 +430,8 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         this.labels.add(new Label(x + 104, y + 6,
                 Component.literal(this.form.tier().gridSize() + "×" + this.form.tier().gridSize()),
                 EditorTheme.TEXT_MUTED));
-        addShapedGrid(x, y + 26, width);
+        addTableBrushToolbar(x, y + 26, width);
+        addShapedGrid(x, y + 50, width);
     }
 
     private void addShapedGrid(int x, int y, int width) {
@@ -377,6 +439,8 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         int availableHeight = this.panelBottom - 32 - y;
         EditorUiScale.ShapedGrid layout = EditorUiScale.shapedGrid(
                 x, y, width, availableHeight, size);
+        this.tableGridLayout = layout;
+        this.tableGridKind = EntryKind.SHAPED_TABLE;
         for (int row = 0; row < size; row++) {
             for (int column = 0; column < size; column++) {
                 int slot = row * size + column;
@@ -384,11 +448,19 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                         layout.gridX() + column * layout.cellSize(),
                         layout.gridY() + row * layout.cellSize(), layout.cellSize(),
                         () -> Optional.ofNullable(this.form.grid().get(slot)),
-                        button -> openIngredient(Optional.ofNullable(this.form.grid().get(slot)),
-                                value -> this.form.gridIngredient(slot, value))));
+                        button -> handleShapedSlot(slot)));
             }
         }
         addTableResult(layout);
+    }
+
+    private void handleShapedSlot(int slot) {
+        if (this.tableBrush.active()) {
+            applyTableBrush(slot);
+            return;
+        }
+        openIngredient(Optional.ofNullable(this.form.grid().get(slot)),
+                value -> this.form.gridIngredient(slot, value));
     }
 
     private void addShapelessEditor(int x, int y, int width) {
@@ -396,7 +468,8 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         this.labels.add(new Label(x + 104, y + 6,
                 Component.literal(this.form.tier().gridSize() + "×" + this.form.tier().gridSize()),
                 EditorTheme.TEXT_MUTED));
-        addShapelessGrid(x, y + 26, width);
+        addTableBrushToolbar(x, y + 26, width);
+        addShapelessGrid(x, y + 50, width);
     }
 
     private void addShapelessGrid(int x, int y, int width) {
@@ -404,6 +477,8 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         int availableHeight = this.panelBottom - 32 - y;
         EditorUiScale.ShapedGrid layout = EditorUiScale.shapedGrid(
                 x, y, width, availableHeight, size);
+        this.tableGridLayout = layout;
+        this.tableGridKind = EntryKind.SHAPELESS_TABLE;
         int capacity = this.form.tier().capacity();
         for (int index = 0; index < capacity; index++) {
             int ingredientIndex = index;
@@ -415,8 +490,9 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                     () -> ingredientIndex < this.form.ingredients().size()
                             ? Optional.of(this.form.ingredients().get(ingredientIndex))
                             : Optional.empty(),
-                    button -> openShapelessIngredient(ingredientIndex));
-            slot.active = ingredientIndex <= this.form.ingredients().size();
+                    button -> handleShapelessSlot(ingredientIndex));
+            slot.active = this.tableBrush.active()
+                    || ingredientIndex <= this.form.ingredients().size();
             this.addRenderableWidget(slot);
         }
         addTableResult(layout);
@@ -437,6 +513,19 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                 value.ifPresent(this.form::addIngredient);
             }
         });
+    }
+
+    private void handleShapelessSlot(int index) {
+        if (this.tableBrush.active()) {
+            applyTableBrush(index);
+            return;
+        }
+        openShapelessIngredient(index);
+    }
+
+    private boolean applyTableBrush(int slot) {
+        this.lastBrushedSlot = slot;
+        return this.tableBrush.apply(this.form, slot);
     }
 
     private void addTableResult(EditorUiScale.ShapedGrid layout) {
@@ -866,6 +955,44 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     private void setStatus(String message, StatusTone tone) {
         this.status = Objects.requireNonNull(message, "message");
         this.statusTone = Objects.requireNonNull(tone, "tone");
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (this.minecraft != null && FocusedEditBoxKeyGuard.consume(
+                this.getFocused(), this.minecraft.options.keyInventory,
+                keyCode, scanCode, modifiers)) {
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button,
+                                double dragX, double dragY) {
+        if (button == 0 && this.tableBrush.active()) {
+            int slot = tableSlotAt(mouseX, mouseY);
+            if (slot >= 0) {
+                if (slot != this.lastBrushedSlot) {
+                    applyTableBrush(slot);
+                }
+                return true;
+            }
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        this.lastBrushedSlot = -1;
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private int tableSlotAt(double mouseX, double mouseY) {
+        if (this.tableGridLayout == null || this.tableGridKind != this.form.kind()) {
+            return -1;
+        }
+        return this.tableGridLayout.slotAt(mouseX, mouseY, this.form.tier().gridSize());
     }
 
     @Override

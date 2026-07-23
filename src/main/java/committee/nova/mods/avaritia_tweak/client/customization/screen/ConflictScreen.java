@@ -17,7 +17,7 @@ import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-public final class ConflictScreen extends Screen {
+public final class ConflictScreen extends ThemedEditorScreen {
     private final Screen previous;
     private final List<FileConflict> conflicts;
     private final Consumer<SortedMap<ArtifactPath, FileObservation>> onTakeover;
@@ -85,7 +85,7 @@ public final class ConflictScreen extends Screen {
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         Layout layout = layout();
-        EditorTheme.renderBackdrop(graphics, this.width, this.height);
+        renderThemedBackground(graphics, mouseX, mouseY, partialTick);
         EditorTheme.renderWindow(graphics, layout.left, layout.top, layout.width, layout.height,
                 EditorTheme.ERROR);
         graphics.drawString(this.font, this.title, layout.left + 10, layout.top + 12,

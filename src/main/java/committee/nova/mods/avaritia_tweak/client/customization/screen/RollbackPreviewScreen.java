@@ -24,7 +24,7 @@ import java.util.Optional;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
-public final class RollbackPreviewScreen extends Screen {
+public final class RollbackPreviewScreen extends ThemedEditorScreen {
     private static final int SIDEBAR_WIDTH = 188;
 
     private final Screen previous;
@@ -200,7 +200,7 @@ public final class RollbackPreviewScreen extends Screen {
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         Layout layout = layout();
-        EditorTheme.renderBackdrop(graphics, this.width, this.height);
+        renderThemedBackground(graphics, mouseX, mouseY, partialTick);
         EditorTheme.renderWindow(graphics, layout.left, layout.top, layout.width, layout.height,
                 EditorTheme.AVARITIA_RED);
         graphics.drawString(this.font, this.title, layout.left + 10, layout.top + 12,

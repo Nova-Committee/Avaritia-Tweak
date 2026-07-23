@@ -16,7 +16,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Optional;
 import java.util.function.Consumer;
 
-public final class ItemStackEditorScreen extends Screen {
+public final class ItemStackEditorScreen extends ThemedEditorScreen {
     private static final int PREVIEW_RAIL_WIDTH = 96;
 
     private final Screen previous;
@@ -106,7 +106,7 @@ public final class ItemStackEditorScreen extends Screen {
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         Layout layout = layout();
-        EditorTheme.renderBackdrop(graphics, this.width, this.height);
+        renderThemedBackground(graphics, mouseX, mouseY, partialTick);
         EditorTheme.renderWindow(graphics, layout.left, layout.top, layout.width, layout.height,
                 EditorTheme.AVARITIA_RED);
         graphics.drawString(this.font, this.title, layout.left + 10, layout.top + 12,

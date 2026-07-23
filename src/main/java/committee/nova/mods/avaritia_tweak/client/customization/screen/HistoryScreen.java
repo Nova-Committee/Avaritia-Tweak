@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public final class HistoryScreen extends Screen {
+public final class HistoryScreen extends ThemedEditorScreen {
     private static final int TIMELINE_WIDTH = 236;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter
             .ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -131,7 +131,7 @@ public final class HistoryScreen extends Screen {
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         Layout layout = layout();
-        EditorTheme.renderBackdrop(graphics, this.width, this.height);
+        renderThemedBackground(graphics, mouseX, mouseY, partialTick);
         EditorTheme.renderWindow(graphics, layout.left, layout.top, layout.width, layout.height,
                 EditorTheme.AVARITIA_RED);
         graphics.drawString(this.font, this.title, layout.left + 10, layout.top + 12,

@@ -14,7 +14,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Optional;
 import java.util.function.Consumer;
 
-public final class IngredientEditorScreen extends Screen {
+public final class IngredientEditorScreen extends ThemedEditorScreen {
     private static final int MODE_RAIL_WIDTH = 84;
 
     private final Screen previous;
@@ -144,7 +144,7 @@ public final class IngredientEditorScreen extends Screen {
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         Layout layout = layout();
-        EditorTheme.renderBackdrop(graphics, this.width, this.height);
+        renderThemedBackground(graphics, mouseX, mouseY, partialTick);
         EditorTheme.renderWindow(graphics, layout.left, layout.top, layout.width, layout.height,
                 EditorTheme.AVARITIA_CYAN);
         graphics.drawString(this.font, this.title, layout.left + 10, layout.top + 12,

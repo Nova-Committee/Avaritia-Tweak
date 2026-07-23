@@ -20,7 +20,7 @@ import java.util.TreeMap;
 import java.util.function.Consumer;
 
 /** Selects an effective Avaritia singularity or a definition staged in the local workspace. */
-final class SingularitySelectScreen extends Screen {
+final class SingularitySelectScreen extends ThemedEditorScreen {
     private final Screen previous;
     private final Consumer<ResourceLocation> onSelected;
     private final List<Choice> allChoices;
@@ -145,7 +145,7 @@ final class SingularitySelectScreen extends Screen {
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         Layout layout = layout();
-        EditorTheme.renderBackdrop(graphics, this.width, this.height);
+        renderThemedBackground(graphics, mouseX, mouseY, partialTick);
         EditorTheme.renderWindow(graphics, layout.left, layout.top, layout.width, layout.height,
                 EditorTheme.AVARITIA_CYAN);
         graphics.drawString(this.font, this.title, layout.left + 10, layout.top + 12,
