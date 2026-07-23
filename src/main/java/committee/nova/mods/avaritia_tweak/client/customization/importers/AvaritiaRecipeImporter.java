@@ -4,8 +4,10 @@ import committee.nova.mods.avaritia.common.crafting.recipe.CompressorRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.EternalSingularityCraftRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ExtremeSmithingRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.InfinityCatalystCraftRecipe;
+import committee.nova.mods.avaritia.common.crafting.recipe.NoConsumeCatalystShapedRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ShapedTableCraftingRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ShapelessTableCraftingRecipe;
+import committee.nova.mods.avaritia.core.singularity.Singularity;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
@@ -67,8 +69,15 @@ public final class AvaritiaRecipeImporter {
             if (recipe instanceof EternalSingularityCraftRecipe eternal) {
                 return importEternal(eternal, target);
             }
+            if (recipe instanceof NoConsumeCatalystShapedRecipe shaped) {
+                if (target != OutputTarget.KUBEJS) {
+                    return failure(recipe, "target", "recipe.target.unsupported",
+                            "Catalyst-preserving shaped recipes can only target KubeJS");
+                }
+                return importShaped(shaped, target, registryAccess, true);
+            }
             if (recipe instanceof ShapedTableCraftingRecipe shaped) {
-                return importShaped(shaped, target, registryAccess);
+                return importShaped(shaped, target, registryAccess, false);
             }
             if (recipe instanceof ShapelessTableCraftingRecipe shapeless) {
                 return importShapeless(shapeless, target, registryAccess);
@@ -103,8 +112,22 @@ public final class AvaritiaRecipeImporter {
         }
     }
 
+    public RecipeImportResult importSingularity(Singularity singularity, OutputTarget target) {
+        ResourceLocation id = singularity.getRegistryName();
+        IngredientImportResult imported = this.ingredientImporter.importIngredient(
+                singularity.getIngredient(), "ingredient");
+        if (imported instanceof IngredientImportResult.Failure failure) {
+            return new RecipeImportResult.Failure(id, failure.fieldPath(), failure.code(), failure.message());
+        }
+        return new RecipeImportResult.Success(new CustomizationEntry.SingularityDefinition(
+                id, target, singularity.getDisplayName(), singularity.getOverlayColor(),
+                singularity.getUnderlayColor(), singularity.getRealCount(), singularity.getTimeCost(),
+                ((IngredientImportResult.Success) imported).ingredient(),
+                singularity.isEnabled(), singularity.isRecipeEnabled()));
+    }
+
     private RecipeImportResult importShaped(ShapedTableCraftingRecipe recipe, OutputTarget target,
-                                            RegistryAccess registryAccess) {
+                                            RegistryAccess registryAccess, boolean catalystPreserving) {
         Optional<CraftingTier> tier = CraftingTier.fromValue(recipe.getTier());
         if (tier.isEmpty()) {
             return failure(recipe, "tier", "recipe.tier.unsupported", "Unsupported table tier");
@@ -127,8 +150,11 @@ public final class AvaritiaRecipeImporter {
                         ((IngredientImportResult.Success) imported).ingredient());
             }
         }
-        return new RecipeImportResult.Success(new CustomizationEntry.ShapedTable(recipe.getId(), target,
-                tier.get(), grid, itemStack(recipe.getResultItem(registryAccess))));
+        ItemStackSpec result = itemStack(recipe.getResultItem(registryAccess));
+        CustomizationEntry entry = catalystPreserving
+                ? new CustomizationEntry.NoConsumeCatalystShaped(recipe.getId(), target, tier.get(), grid, result)
+                : new CustomizationEntry.ShapedTable(recipe.getId(), target, tier.get(), grid, result);
+        return new RecipeImportResult.Success(entry);
     }
 
     private RecipeImportResult importShapeless(ShapelessTableCraftingRecipe recipe, OutputTarget target,

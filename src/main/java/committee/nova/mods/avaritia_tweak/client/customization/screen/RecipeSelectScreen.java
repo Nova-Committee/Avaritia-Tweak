@@ -5,6 +5,8 @@ import committee.nova.mods.avaritia_tweak.client.customization.importers.RecipeI
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
+import committee.nova.mods.avaritia.core.singularity.SingularityReloadListener;
+import committee.nova.mods.avaritia.util.SingularityUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -12,7 +14,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Recipe;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
 
@@ -22,14 +23,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public final class RecipeSelectScreen extends Screen {
     private final Screen previous;
     private final OutputTarget target;
     private final Consumer<RecipeImportResult> onImported;
     private final AvaritiaRecipeImporter importer = new AvaritiaRecipeImporter();
-    private final List<Recipe<?>> allRecipes = new ArrayList<>();
-    private final List<Recipe<?>> filteredRecipes = new ArrayList<>();
+    private final List<ImportCandidate> allRecipes = new ArrayList<>();
+    private final List<ImportCandidate> filteredRecipes = new ArrayList<>();
     private final List<RecipeRow> visibleRows = new ArrayList<>();
     private final List<EditorButton> resultWidgets = new ArrayList<>();
     private final DeferredSearchRefresh searchRefresh = new DeferredSearchRefresh();
@@ -37,7 +39,7 @@ public final class RecipeSelectScreen extends Screen {
     private EditorButton previousPage;
     private EditorButton nextPage;
     private EditorButton importButton;
-    private Recipe<?> selected;
+    private ImportCandidate selected;
     private Optional<RecipeImportResult> selectedInspection = Optional.empty();
     private Optional<ResourceLocation> inventoryOutput = Optional.empty();
     private int page;
@@ -48,7 +50,7 @@ public final class RecipeSelectScreen extends Screen {
                               Consumer<RecipeImportResult> onImported) {
         super(Component.translatable("gui.avaritia_tweak.recipe_import.title"));
         this.previous = previous;
-        this.target = target == OutputTarget.DATAPACK ? OutputTarget.KUBEJS : target;
+        this.target = target;
         this.onImported = onImported;
     }
 
@@ -114,10 +116,24 @@ public final class RecipeSelectScreen extends Screen {
         if (Minecraft.getInstance().level == null) {
             return;
         }
-        Minecraft.getInstance().level.getRecipeManager().getRecipes().stream()
-                .filter(this.importer::supports)
-                .sorted(Comparator.comparing(recipe -> recipe.getId().toString()))
+        var level = Minecraft.getInstance().level;
+        var registryAccess = level.registryAccess();
+        if (this.target != OutputTarget.DATAPACK) {
+            level.getRecipeManager().getRecipes().stream()
+                    .filter(this.importer::supports)
+                    .map(recipe -> new ImportCandidate(recipe.getId(),
+                            recipe.getResultItem(registryAccess),
+                            recipe.getClass().getSimpleName(),
+                            () -> this.importer.importRecipe(recipe, this.target, registryAccess)))
+                    .forEach(this.allRecipes::add);
+        }
+        SingularityReloadListener.INSTANCE.getAllSingularities().values().stream()
+                .map(singularity -> new ImportCandidate(singularity.getRegistryName(),
+                        SingularityUtils.getItemForSingularity(singularity),
+                        "SingularityDefinition",
+                        () -> this.importer.importSingularity(singularity, this.target)))
                 .forEach(this.allRecipes::add);
+        this.allRecipes.sort(Comparator.comparing(candidate -> candidate.id().toString()));
         updateFilteredRecipes();
     }
 
@@ -135,15 +151,15 @@ public final class RecipeSelectScreen extends Screen {
                 .forEach(this.filteredRecipes::add);
     }
 
-    private boolean matchesFilters(Recipe<?> recipe) {
-        ItemStack output = result(recipe);
+    private boolean matchesFilters(ImportCandidate recipe) {
+        ItemStack output = recipe.result();
         ResourceLocation outputId = output.isEmpty()
                 ? null
                 : ForgeRegistries.ITEMS.getKey(output.getItem());
         if (this.inventoryOutput.isPresent() && !this.inventoryOutput.get().equals(outputId)) {
             return false;
         }
-        return SearchText.matches(this.query, recipe.getId().toString(),
+        return SearchText.matches(this.query, recipe.id().toString(), recipe.handler(),
                 outputId == null ? "" : outputId.toString(), output.getHoverName().getString());
     }
 
@@ -195,25 +211,14 @@ public final class RecipeSelectScreen extends Screen {
         Minecraft.getInstance().setScreen(this.previous);
     }
 
-    private Optional<RecipeImportResult> inspect(Recipe<?> recipe) {
-        if (Minecraft.getInstance().level == null) {
-            return Optional.empty();
-        }
-        return Optional.of(this.importer.importRecipe(recipe, this.target,
-                Minecraft.getInstance().level.registryAccess()));
+    private Optional<RecipeImportResult> inspect(ImportCandidate recipe) {
+        return Optional.of(recipe.inspect());
     }
 
-    private void selectRecipe(Recipe<?> recipe) {
+    private void selectRecipe(ImportCandidate recipe) {
         this.selected = recipe;
         this.selectedInspection = inspect(recipe);
         requestResultRefresh();
-    }
-
-    private ItemStack result(Recipe<?> recipe) {
-        if (Minecraft.getInstance().level == null) {
-            return ItemStack.EMPTY;
-        }
-        return recipe.getResultItem(Minecraft.getInstance().level.registryAccess());
     }
 
     private void refreshResults() {
@@ -226,9 +231,9 @@ public final class RecipeSelectScreen extends Screen {
         this.page = Math.min(this.page, maxPage);
         int start = this.page * pageSize;
         for (int index = start; index < Math.min(this.filteredRecipes.size(), start + pageSize); index++) {
-            Recipe<?> recipe = this.filteredRecipes.get(index);
+            ImportCandidate recipe = this.filteredRecipes.get(index);
             int y = layout.listTop + (index - start) * 22;
-            String id = ScreenText.fit(this.font, recipe.getId().toString(), layout.listWidth - 58);
+            String id = ScreenText.fit(this.font, recipe.id().toString(), layout.listWidth - 58);
             EditorButton row = EditorButton.builder(Component.literal(id), button -> selectRecipe(recipe))
                     .bounds(layout.left + 34, y, layout.listWidth - 42, 20)
                     .style(EditorButton.Style.LIST).selected(recipe == this.selected).build();
@@ -304,7 +309,7 @@ public final class RecipeSelectScreen extends Screen {
         for (RecipeRow row : this.visibleRows) {
             EditorTheme.renderSlot(graphics, row.x, row.y, 20, 20,
                     mouseX >= row.x && mouseX < row.x + 20 && mouseY >= row.y && mouseY < row.y + 20);
-            ItemStack stack = result(row.recipe);
+            ItemStack stack = row.recipe.result();
             graphics.renderItem(stack, row.x + 2, row.y + 2);
         }
     }
@@ -317,7 +322,7 @@ public final class RecipeSelectScreen extends Screen {
                     layout.detailX, layout.top + 68, layout.detailWidth, EditorTheme.TEXT_MUTED);
             return Optional.empty();
         }
-        ItemStack result = result(this.selected);
+        ItemStack result = this.selected.result();
         int slotX = layout.detailX;
         int slotY = layout.top + 62;
         int slotSize = Math.min(38, Math.max(24, layout.detailWidth / 4));
@@ -335,7 +340,7 @@ public final class RecipeSelectScreen extends Screen {
         int y = slotY + slotSize + 6;
         y = renderInspectorLine(graphics, layout.detailX, y, layout.detailWidth,
                 Component.translatable("gui.avaritia_tweak.recipe_import.id_short"),
-                this.selected.getId().toString(), EditorTheme.AVARITIA_CYAN);
+                this.selected.id().toString(), EditorTheme.AVARITIA_CYAN);
 
         RecipeImportResult inspection = this.selectedInspection.orElse(null);
         if (inspection instanceof RecipeImportResult.Failure failure) {
@@ -358,7 +363,7 @@ public final class RecipeSelectScreen extends Screen {
         if (!compact) {
             y = renderInspectorLine(graphics, layout.detailX, y, layout.detailWidth,
                     Component.translatable("gui.avaritia_tweak.recipe_import.handler"),
-                    this.selected.getClass().getSimpleName(), EditorTheme.SUCCESS);
+                    this.selected.handler(), EditorTheme.SUCCESS);
         }
         for (RecipeInspectorDetails.Attribute attribute : details.attributes()) {
             y = renderInspectorLine(graphics, layout.detailX, y, layout.detailWidth,
@@ -466,7 +471,22 @@ public final class RecipeSelectScreen extends Screen {
         Minecraft.getInstance().setScreen(this.previous);
     }
 
-    private record RecipeRow(Recipe<?> recipe, int x, int y) {
+    private record RecipeRow(ImportCandidate recipe, int x, int y) {
+    }
+
+    private record ImportCandidate(ResourceLocation id, ItemStack output, String handler,
+                                   Supplier<RecipeImportResult> inspection) {
+        private ImportCandidate {
+            output = output.copy();
+        }
+
+        ItemStack result() {
+            return this.output.copy();
+        }
+
+        RecipeImportResult inspect() {
+            return this.inspection.get();
+        }
     }
 
     private record Layout(int left, int top, int width, int height, int listWidth,

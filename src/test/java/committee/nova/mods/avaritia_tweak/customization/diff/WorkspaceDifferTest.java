@@ -18,7 +18,8 @@ class WorkspaceDifferTest {
     void reportsAddedModifiedAndRemovedEntriesWithFieldPaths() {
         CustomizationEntry removed = recipe("test:removed", OutputTarget.KUBEJS, 1);
         CustomizationEntry oldModified = recipe("test:modified", OutputTarget.KUBEJS, 1);
-        CustomizationEntry newModified = recipe("test:modified", OutputTarget.CRAFTTWEAKER, 2);
+        CustomizationEntry newModified = recipe("test:modified", OutputTarget.CRAFTTWEAKER, 2,
+                "调整后的主配方");
         CustomizationEntry added = recipe("test:added", OutputTarget.KUBEJS, 1);
         WorkspaceSnapshot before = WorkspaceSnapshot.empty().withEntry(removed).withEntry(oldModified);
         WorkspaceSnapshot after = WorkspaceSnapshot.empty().withEntry(newModified).withEntry(added);
@@ -30,11 +31,15 @@ class WorkspaceDifferTest {
         assertThat(diff.count(ChangeType.REMOVED)).isEqualTo(1);
         assertThat(diff.entries()).filteredOn(change -> change.type() == ChangeType.MODIFIED)
                 .singleElement().extracting(EntryChange::fields).asList()
-                .extracting("fieldPath").contains("target", "result.count");
+                .extracting("fieldPath").contains("note", "target", "result.count");
     }
 
     private static CustomizationEntry recipe(String id, OutputTarget target, int count) {
-        return new CustomizationEntry.ShapelessTable(ResourceLocation.tryParse(id), target,
+        return recipe(id, target, count, "");
+    }
+
+    private static CustomizationEntry recipe(String id, OutputTarget target, int count, String note) {
+        return new CustomizationEntry.ShapelessTable(ResourceLocation.tryParse(id), target, note,
                 CraftingTier.SCULK, List.of(new IngredientSpec.Item(ResourceLocation.tryParse("minecraft:stone"))),
                 new ItemStackSpec(ResourceLocation.tryParse("minecraft:diamond"), count));
     }

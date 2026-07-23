@@ -40,6 +40,21 @@ class RecipeInspectorDetailsTest {
     }
 
     @Test
+    void catalystPreservingRecipeUsesTheSamePositionedInspectorGrid() {
+        IngredientSpec catalyst = item("avaritia:infinity_catalyst");
+        CustomizationEntry entry = new CustomizationEntry.NoConsumeCatalystShaped(
+                id("test:keep_catalyst"), OutputTarget.KUBEJS, CraftingTier.END,
+                new TreeMap<>(Map.of(24, catalyst)), result());
+
+        RecipeInspectorDetails.Details details = RecipeInspectorDetails.from(entry);
+
+        assertThat(details.kind()).isEqualTo(EntryKind.NO_CONSUME_CATALYST_SHAPED);
+        assertThat(details.columns()).isEqualTo(7);
+        assertThat(details.slotCount()).isEqualTo(49);
+        assertThat(details.cells().get(24).ingredient()).isEqualTo(catalyst);
+    }
+
+    @Test
     void typeSpecificParametersAndIngredientRolesRemainVisible() {
         CustomizationEntry.Compressor compressor = new CustomizationEntry.Compressor(
                 id("test:compressor"), OutputTarget.CRAFTTWEAKER, item("minecraft:iron_ingot"),

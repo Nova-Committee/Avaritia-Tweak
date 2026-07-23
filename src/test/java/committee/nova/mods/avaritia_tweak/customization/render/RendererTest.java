@@ -40,6 +40,28 @@ class RendererTest {
     }
 
     @Test
+    void rendersCatalystPreservingRecipeAsNativeAvaritiaJson() {
+        TreeMap<Integer, IngredientSpec> shape = new TreeMap<>();
+        shape.put(0, item("avaritia:infinity_catalyst"));
+        shape.put(2, item("minecraft:stone"));
+        CustomizationEntry recipe = new CustomizationEntry.NoConsumeCatalystShaped(
+                id("test:keep_catalyst"), OutputTarget.KUBEJS, CraftingTier.SCULK,
+                shape, result());
+
+        String script = new KubeJsRenderer().render(snapshot(recipe)).get(0).text();
+
+        assertThat(script)
+                .contains("event.custom({",
+                        "\"type\": \"avaritia:no_consume_catalyst_shaped\"",
+                        "\"pattern\": [", "\"! #\"", "\"key\": {",
+                        "\"item\": \"avaritia:infinity_catalyst\"",
+                        "\"result\": {", "\"item\": \"minecraft:diamond\"",
+                        "\"count\": 2", "\"tier\": 1",
+                        ".id(\"test:keep_catalyst\")")
+                .doesNotContain("avaritia.shaped_table(");
+    }
+
+    @Test
     void rendersAllSixCraftTweakerContractsAndActualEnternalSpelling() {
         String script = new CraftTweakerRenderer()
                 .render(snapshot(recipes(OutputTarget.CRAFTTWEAKER))).get(0).text();
@@ -101,6 +123,35 @@ class RendererTest {
                 .get("item").getAsString()).isEqualTo("minecraft:stone");
         assertThat(encoded.getAsJsonArray("children").get(1).getAsJsonObject()
                 .get("item").getAsString()).isEqualTo("minecraft:dirt");
+    }
+
+    @Test
+    void rejectsCrossVersionDataComponentPredicatesBeforeRendering() {
+        IngredientSpec.Components components = new IngredientSpec.Components(id("minecraft:potion"),
+                "{\"minecraft:potion_contents\":{\"potion\":\"minecraft:swiftness\"}}", false);
+
+        assertThatThrownBy(() -> KubeJsRenderer.ingredient(components))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("1.20.1");
+        assertThatThrownBy(() -> IngredientJson.encode(components))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("1.20.1");
+    }
+
+    @Test
+    void entryNotesDoNotChangeGeneratedArtifacts() {
+        CustomizationEntry withoutNote = new CustomizationEntry.Compressor(id("test:note"),
+                OutputTarget.KUBEJS, item("minecraft:stone"), result(), 1, 1);
+        CustomizationEntry withNote = new CustomizationEntry.Compressor(id("test:note"),
+                OutputTarget.KUBEJS, "仅用于编辑器列表", item("minecraft:stone"), result(), 1, 1);
+
+        RenderPlan first = WorkspaceRenderService.standard().render(snapshot(withoutNote));
+        RenderPlan second = WorkspaceRenderService.standard().render(snapshot(withNote));
+
+        assertThat(second.artifacts().keySet()).isEqualTo(first.artifacts().keySet());
+        first.artifacts().forEach((path, artifact) ->
+                assertThat(second.artifacts().get(path).utf8Content())
+                        .containsExactly(artifact.utf8Content()));
     }
 
     @Test

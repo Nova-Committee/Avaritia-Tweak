@@ -38,6 +38,7 @@ public final class EntryNavigation {
             return true;
         }
         return entry.id().toString().toLowerCase(Locale.ROOT).contains(normalized)
+                || entry.note().toLowerCase(Locale.ROOT).contains(normalized)
                 || entry.kind().name().toLowerCase(Locale.ROOT).contains(normalized)
                 || entry.target().name().toLowerCase(Locale.ROOT).contains(normalized);
     }

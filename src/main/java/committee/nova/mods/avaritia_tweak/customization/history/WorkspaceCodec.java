@@ -99,17 +99,11 @@ public final class WorkspaceCodec {
         json.addProperty("kind", entry.kind().name());
         json.addProperty("id", entry.id().toString());
         json.addProperty("target", entry.target().name());
+        json.addProperty("note", entry.note());
         if (entry instanceof CustomizationEntry.ShapedTable shaped) {
-            json.addProperty("tier", shaped.tier().name());
-            JsonArray ingredients = new JsonArray();
-            shaped.ingredients().forEach((slot, ingredient) -> {
-                JsonObject positioned = new JsonObject();
-                positioned.addProperty("slot", slot);
-                positioned.add("ingredient", ingredient(ingredient));
-                ingredients.add(positioned);
-            });
-            json.add("ingredients", ingredients);
-            json.add("result", itemStack(shaped.result()));
+            positionedRecipe(json, shaped.tier(), shaped.ingredients(), shaped.result());
+        } else if (entry instanceof CustomizationEntry.NoConsumeCatalystShaped shaped) {
+            positionedRecipe(json, shaped.tier(), shaped.ingredients(), shaped.result());
         } else if (entry instanceof CustomizationEntry.ShapelessTable shapeless) {
             json.addProperty("tier", shapeless.tier().name());
             json.add("ingredients", ingredients(shapeless.ingredients()));
@@ -152,31 +146,37 @@ public final class WorkspaceCodec {
         ResourceLocation id = resourceLocation(string(json, "id", path + ".id"), path + ".id");
         OutputTarget target = enumeration(OutputTarget.class,
                 string(json, "target", path + ".target"), path + ".target");
+        String note = optionalString(json, "note").orElse("");
         return switch (kind) {
-            case SHAPED_TABLE -> new CustomizationEntry.ShapedTable(id, target,
+            case SHAPED_TABLE -> new CustomizationEntry.ShapedTable(id, target, note,
                     enumeration(CraftingTier.class, string(json, "tier", path + ".tier"), path + ".tier"),
                     positionedIngredients(json, path), itemStack(object(json, "result", path + ".result"),
                     path + ".result"));
-            case SHAPELESS_TABLE -> new CustomizationEntry.ShapelessTable(id, target,
+            case NO_CONSUME_CATALYST_SHAPED -> new CustomizationEntry.NoConsumeCatalystShaped(
+                    id, target, note,
+                    enumeration(CraftingTier.class, string(json, "tier", path + ".tier"), path + ".tier"),
+                    positionedIngredients(json, path), itemStack(object(json, "result", path + ".result"),
+                    path + ".result"));
+            case SHAPELESS_TABLE -> new CustomizationEntry.ShapelessTable(id, target, note,
                     enumeration(CraftingTier.class, string(json, "tier", path + ".tier"), path + ".tier"),
                     ingredients(json, path), itemStack(object(json, "result", path + ".result"),
                     path + ".result"));
-            case COMPRESSOR -> new CustomizationEntry.Compressor(id, target,
+            case COMPRESSOR -> new CustomizationEntry.Compressor(id, target, note,
                     ingredient(object(json, "ingredient", path + ".ingredient"), path + ".ingredient"),
                     itemStack(object(json, "result", path + ".result"), path + ".result"),
                     integer(json, "inputCount", path + ".inputCount"),
                     integer(json, "timeCost", path + ".timeCost"));
-            case EXTREME_SMITHING -> new CustomizationEntry.ExtremeSmithing(id, target,
+            case EXTREME_SMITHING -> new CustomizationEntry.ExtremeSmithing(id, target, note,
                     ingredient(object(json, "template", path + ".template"), path + ".template"),
                     ingredient(object(json, "base", path + ".base"), path + ".base"),
                     ingredient(object(json, "addition", path + ".addition"), path + ".addition"),
                     itemStack(object(json, "result", path + ".result"), path + ".result"));
-            case INFINITY_CATALYST -> new CustomizationEntry.InfinityCatalyst(id, target,
+            case INFINITY_CATALYST -> new CustomizationEntry.InfinityCatalyst(id, target, note,
                     string(json, "group", path + ".group"), ingredients(json, path),
                     integer(json, "count", path + ".count"));
-            case ETERNAL_SINGULARITY -> new CustomizationEntry.EternalSingularity(id, target,
+            case ETERNAL_SINGULARITY -> new CustomizationEntry.EternalSingularity(id, target, note,
                     ingredients(json, path), integer(json, "count", path + ".count"));
-            case SINGULARITY_DEFINITION -> new CustomizationEntry.SingularityDefinition(id, target,
+            case SINGULARITY_DEFINITION -> new CustomizationEntry.SingularityDefinition(id, target, note,
                     string(json, "displayName", path + ".displayName"),
                     integer(json, "overlayColor", path + ".overlayColor"),
                     integer(json, "underlayColor", path + ".underlayColor"),
@@ -185,12 +185,27 @@ public final class WorkspaceCodec {
                     ingredient(object(json, "ingredient", path + ".ingredient"), path + ".ingredient"),
                     bool(json, "enabled", path + ".enabled"),
                     bool(json, "recipeEnabled", path + ".recipeEnabled"));
-            case SINGULARITY_OPERATION -> new CustomizationEntry.SingularityOperation(id, target,
+            case SINGULARITY_OPERATION -> new CustomizationEntry.SingularityOperation(id, target, note,
                     enumeration(SingularityAction.class, string(json, "action", path + ".action"),
                             path + ".action"),
                     optionalString(json, "singularityId")
                             .map(value -> resourceLocation(value, path + ".singularityId")));
         };
+    }
+
+    private static void positionedRecipe(JsonObject json, CraftingTier tier,
+                                         SortedMap<Integer, IngredientSpec> positionedIngredients,
+                                         ItemStackSpec result) {
+        json.addProperty("tier", tier.name());
+        JsonArray ingredients = new JsonArray();
+        positionedIngredients.forEach((slot, ingredient) -> {
+            JsonObject positioned = new JsonObject();
+            positioned.addProperty("slot", slot);
+            positioned.add("ingredient", ingredient(ingredient));
+            ingredients.add(positioned);
+        });
+        json.add("ingredients", ingredients);
+        json.add("result", itemStack(result));
     }
 
     private static JsonObject ingredient(IngredientSpec ingredient) {
@@ -201,6 +216,11 @@ public final class WorkspaceCodec {
         } else if (ingredient instanceof IngredientSpec.Tag tag) {
             json.addProperty("type", "tag");
             json.addProperty("id", tag.tagId().toString());
+        } else if (ingredient instanceof IngredientSpec.Components components) {
+            json.addProperty("type", "components");
+            json.addProperty("id", components.itemId().toString());
+            json.add("components", JsonParser.parseString(components.componentsJson()));
+            json.addProperty("strict", components.strict());
         } else {
             IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
             json.addProperty("type", "item");
@@ -225,6 +245,10 @@ public final class WorkspaceCodec {
                 yield new IngredientSpec.Tag(
                         resourceLocation(string(json, "id", path + ".id"), path + ".id"));
             }
+            case "components" -> new IngredientSpec.Components(
+                    resourceLocation(string(json, "id", path + ".id"), path + ".id"),
+                    object(json, "components", path + ".components").toString(),
+                    bool(json, "strict", path + ".strict"));
             case "choice" -> {
                 JsonArray alternatives = array(json, "alternatives", path + ".alternatives");
                 if (alternatives.size() < 2) {

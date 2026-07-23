@@ -184,6 +184,10 @@ public final class CraftTweakerRenderer implements ArtifactRenderer {
         if (ingredient instanceof IngredientSpec.Tag tag) {
             return "<tag:items:" + tag.tagId() + ">";
         }
+        if (ingredient instanceof IngredientSpec.Components) {
+            throw new IllegalArgumentException(
+                    "Data-component predicates are unavailable on Minecraft 1.20.1");
+        }
         IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
         String base = "<item:" + item.itemId() + ">";
         return item.strictNbt().map(nbt -> {

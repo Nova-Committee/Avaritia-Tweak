@@ -24,11 +24,12 @@ final class RecipeInspectorDetails {
     static Details from(CustomizationEntry entry) {
         Objects.requireNonNull(entry, "entry");
         if (entry instanceof CustomizationEntry.ShapedTable shaped) {
-            TreeMap<Integer, IngredientCell> cells = new TreeMap<>();
-            shaped.ingredients().forEach((slot, ingredient) ->
-                    cells.put(slot, new IngredientCell(ingredient, "")));
-            return new Details(shaped.kind(), shaped.tier().gridSize(), shaped.tier().capacity(),
-                    cells, List.of(tierGrid(shaped.tier().value(), shaped.tier().gridSize())));
+            return shaped(shaped.kind(), shaped.tier().value(), shaped.tier().gridSize(),
+                    shaped.ingredients());
+        }
+        if (entry instanceof CustomizationEntry.NoConsumeCatalystShaped shaped) {
+            return shaped(shaped.kind(), shaped.tier().value(), shaped.tier().gridSize(),
+                    shaped.ingredients());
         }
         if (entry instanceof CustomizationEntry.ShapelessTable shapeless) {
             return list(shapeless.kind(), shapeless.ingredients(), shapeless.tier().gridSize(),
@@ -68,6 +69,14 @@ final class RecipeInspectorDetails {
         int slotCount = Math.max(1, ingredients.size());
         int columns = Math.max(1, Math.min(maximumColumns, slotCount));
         return new Details(kind, columns, slotCount, cells, attributes);
+    }
+
+    private static Details shaped(EntryKind kind, int tier, int gridSize,
+                                  SortedMap<Integer, IngredientSpec> ingredients) {
+        TreeMap<Integer, IngredientCell> cells = new TreeMap<>();
+        ingredients.forEach((slot, ingredient) -> cells.put(slot, new IngredientCell(ingredient, "")));
+        return new Details(kind, gridSize, gridSize * gridSize, cells,
+                List.of(tierGrid(tier, gridSize)));
     }
 
     private static Attribute tierGrid(int tier, int gridSize) {

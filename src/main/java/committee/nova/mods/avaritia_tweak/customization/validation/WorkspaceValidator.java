@@ -1,5 +1,6 @@
 package committee.nova.mods.avaritia_tweak.customization.validation;
 
+import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.EntryKey;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
@@ -17,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedMap;
 
 public final class WorkspaceValidator {
     private final RegistryLookup registryLookup;
@@ -65,11 +67,50 @@ public final class WorkspaceValidator {
             issues.add(ValidationIssue.error(entry.key(), "target", "validation.target.unsupported",
                     entry.target().name(), entry.kind().name()));
         }
+        if (containsComponents(entry)) {
+            issues.add(ValidationIssue.error(entry.key(), "target",
+                    "validation.target.components_version_unsupported"));
+        }
+    }
+
+    private static boolean containsComponents(CustomizationEntry entry) {
+        if (entry instanceof CustomizationEntry.ShapedTable shaped) {
+            return shaped.ingredients().values().stream().anyMatch(WorkspaceValidator::containsComponents);
+        }
+        if (entry instanceof CustomizationEntry.NoConsumeCatalystShaped shaped) {
+            return shaped.ingredients().values().stream().anyMatch(WorkspaceValidator::containsComponents);
+        }
+        if (entry instanceof CustomizationEntry.ShapelessTable shapeless) {
+            return shapeless.ingredients().stream().anyMatch(WorkspaceValidator::containsComponents);
+        }
+        if (entry instanceof CustomizationEntry.Compressor compressor) {
+            return containsComponents(compressor.ingredient());
+        }
+        if (entry instanceof CustomizationEntry.ExtremeSmithing smithing) {
+            return containsComponents(smithing.template()) || containsComponents(smithing.base())
+                    || containsComponents(smithing.addition());
+        }
+        if (entry instanceof CustomizationEntry.InfinityCatalyst catalyst) {
+            return catalyst.ingredients().stream().anyMatch(WorkspaceValidator::containsComponents);
+        }
+        if (entry instanceof CustomizationEntry.EternalSingularity eternal) {
+            return eternal.ingredients().stream().anyMatch(WorkspaceValidator::containsComponents);
+        }
+        return entry instanceof CustomizationEntry.SingularityDefinition definition
+                && containsComponents(definition.ingredient());
+    }
+
+    private static boolean containsComponents(IngredientSpec ingredient) {
+        return ingredient instanceof IngredientSpec.Components
+                || ingredient instanceof IngredientSpec.Choice choice
+                && choice.alternatives().stream().anyMatch(WorkspaceValidator::containsComponents);
     }
 
     private void validateEntry(CustomizationEntry entry, List<ValidationIssue> issues) {
         if (entry instanceof CustomizationEntry.ShapedTable shaped) {
-            validateShaped(shaped, issues);
+            validateShaped(shaped.key(), shaped.tier(), shaped.ingredients(), shaped.result(), issues);
+        } else if (entry instanceof CustomizationEntry.NoConsumeCatalystShaped shaped) {
+            validateShaped(shaped.key(), shaped.tier(), shaped.ingredients(), shaped.result(), issues);
         } else if (entry instanceof CustomizationEntry.ShapelessTable shapeless) {
             validateShapeless(shapeless, issues);
         } else if (entry instanceof CustomizationEntry.Compressor compressor) {
@@ -98,20 +139,22 @@ public final class WorkspaceValidator {
         }
     }
 
-    private void validateShaped(CustomizationEntry.ShapedTable entry, List<ValidationIssue> issues) {
-        if (entry.ingredients().isEmpty()) {
-            issues.add(ValidationIssue.error(entry.key(), "ingredients", "validation.ingredients.empty"));
+    private void validateShaped(EntryKey key, CraftingTier tier,
+                                SortedMap<Integer, IngredientSpec> ingredients, ItemStackSpec result,
+                                List<ValidationIssue> issues) {
+        if (ingredients.isEmpty()) {
+            issues.add(ValidationIssue.error(key, "ingredients", "validation.ingredients.empty"));
         }
-        entry.ingredients().forEach((slot, ingredient) -> {
-            if (slot < 0 || slot >= entry.tier().capacity()) {
-                issues.add(ValidationIssue.error(entry.key(), "ingredients[" + slot + "]",
+        ingredients.forEach((slot, ingredient) -> {
+            if (slot < 0 || slot >= tier.capacity()) {
+                issues.add(ValidationIssue.error(key, "ingredients[" + slot + "]",
                         "validation.grid.slot.out_of_bounds", Integer.toString(slot),
-                        Integer.toString(entry.tier().capacity())));
+                        Integer.toString(tier.capacity())));
             } else {
-                validateIngredient(entry.key(), "ingredients[" + slot + "]", ingredient, issues);
+                validateIngredient(key, "ingredients[" + slot + "]", ingredient, issues);
             }
         });
-        validateResult(entry.key(), "result", entry.result(), issues);
+        validateResult(key, "result", result, issues);
     }
 
     private void validateShapeless(CustomizationEntry.ShapelessTable entry, List<ValidationIssue> issues) {
@@ -167,6 +210,11 @@ public final class WorkspaceValidator {
             if (this.registryLookup.itemMaxStackSize(item.itemId()).isEmpty()) {
                 issues.add(ValidationIssue.error(key, field + ".itemId", "validation.item.missing",
                         item.itemId().toString()));
+            }
+        } else if (ingredient instanceof IngredientSpec.Components components) {
+            if (this.registryLookup.itemMaxStackSize(components.itemId()).isEmpty()) {
+                issues.add(ValidationIssue.error(key, field + ".itemId", "validation.item.missing",
+                        components.itemId().toString()));
             }
         } else if (ingredient instanceof IngredientSpec.Tag tag
                 && !this.registryLookup.itemTagExists(tag.tagId())) {

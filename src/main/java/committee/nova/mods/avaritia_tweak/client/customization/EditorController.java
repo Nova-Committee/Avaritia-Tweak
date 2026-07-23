@@ -114,6 +114,25 @@ public final class EditorController {
         scheduleDraft();
     }
 
+    /** Restores one draft entry to the committed snapshot without disturbing other draft entries. */
+    public synchronized boolean restoreEntry(EntryKey key) {
+        Objects.requireNonNull(key, "key");
+        CustomizationEntry committedEntry = this.committed.entries().get(key);
+        WorkspaceSnapshot restored = committedEntry == null
+                ? this.draft.withoutEntry(key)
+                : this.draft.withEntry(committedEntry);
+        if (restored.equals(this.draft)) {
+            return false;
+        }
+        this.draft = restored;
+        if (committedEntry == null && this.selectedEntry.filter(key::equals).isPresent()) {
+            this.selectedEntry = Optional.empty();
+        }
+        invalidatePreview();
+        scheduleDraft();
+        return true;
+    }
+
     public synchronized void clearDraft() {
         this.draft = WorkspaceSnapshot.empty();
         this.selectedEntry = Optional.empty();

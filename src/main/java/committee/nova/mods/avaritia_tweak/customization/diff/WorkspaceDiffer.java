@@ -59,12 +59,12 @@ public final class WorkspaceDiffer {
 
     private static SortedMap<String, String> fields(CustomizationEntry entry) {
         TreeMap<String, String> fields = new TreeMap<>();
+        fields.put("note", entry.note());
         fields.put("target", entry.target().name());
         if (entry instanceof CustomizationEntry.ShapedTable shaped) {
-            fields.put("tier", shaped.tier().name());
-            shaped.ingredients().forEach((slot, ingredient) ->
-                    fields.put("ingredients[" + slot + "]", ingredient(ingredient)));
-            result(fields, shaped.result());
+            positionedRecipe(fields, shaped.tier().name(), shaped.ingredients(), shaped.result());
+        } else if (entry instanceof CustomizationEntry.NoConsumeCatalystShaped shaped) {
+            positionedRecipe(fields, shaped.tier().name(), shaped.ingredients(), shaped.result());
         } else if (entry instanceof CustomizationEntry.ShapelessTable shapeless) {
             fields.put("tier", shapeless.tier().name());
             ingredients(fields, shapeless.ingredients());
@@ -102,6 +102,15 @@ public final class WorkspaceDiffer {
         return fields;
     }
 
+    private static void positionedRecipe(Map<String, String> fields, String tier,
+                                         SortedMap<Integer, IngredientSpec> positionedIngredients,
+                                         ItemStackSpec result) {
+        fields.put("tier", tier);
+        positionedIngredients.forEach((slot, ingredient) ->
+                fields.put("ingredients[" + slot + "]", ingredient(ingredient)));
+        result(fields, result);
+    }
+
     private static void ingredients(Map<String, String> fields, List<IngredientSpec> ingredients) {
         for (int index = 0; index < ingredients.size(); index++) {
             fields.put("ingredients[" + index + "]", ingredient(ingredients.get(index)));
@@ -122,6 +131,10 @@ public final class WorkspaceDiffer {
         }
         if (ingredient instanceof IngredientSpec.Tag tag) {
             return "#" + tag.tagId();
+        }
+        if (ingredient instanceof IngredientSpec.Components components) {
+            return components.itemId() + " components:" + components.componentsJson()
+                    + " strict:" + components.strict();
         }
         IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
         return item.itemId() + item.strictNbt().map(nbt -> " nbt:" + nbtSummary(nbt)).orElse("");

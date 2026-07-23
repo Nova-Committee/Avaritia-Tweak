@@ -8,6 +8,7 @@ public enum OutputTarget {
     CRAFTTWEAKER,
     DATAPACK;
 
+    private static final List<OutputTarget> KUBEJS_ONLY = List.of(KUBEJS);
     private static final List<OutputTarget> SCRIPT_TARGETS = List.of(KUBEJS, CRAFTTWEAKER);
     private static final List<OutputTarget> DEFINITION_TARGETS = List.of(values());
 
@@ -16,8 +17,12 @@ public enum OutputTarget {
     }
 
     public static List<OutputTarget> compatibleWith(EntryKind kind) {
-        return kind == EntryKind.SINGULARITY_DEFINITION
-                ? DEFINITION_TARGETS
-                : SCRIPT_TARGETS;
+        if (kind == EntryKind.SINGULARITY_DEFINITION) {
+            return DEFINITION_TARGETS;
+        }
+        if (kind == EntryKind.NO_CONSUME_CATALYST_SHAPED) {
+            return KUBEJS_ONLY;
+        }
+        return SCRIPT_TARGETS;
     }
 }
