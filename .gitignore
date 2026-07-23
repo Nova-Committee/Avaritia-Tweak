@@ -1,0 +1,14 @@
+# AI tooling and agent configuration
+/.agents/
+/.codegraph/
+/.codex/
+/.spec-workflow/
+/.trellis/
+/AGENTS.md
+
+# Gradle and Forge generated directories
+/.gradle/
+/build/
+/logs/
+/run/
+/src/generated/
