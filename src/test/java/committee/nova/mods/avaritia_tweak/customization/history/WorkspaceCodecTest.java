@@ -41,6 +41,51 @@ class WorkspaceCodecTest {
     }
 
     @Test
+    void roundTripsChoiceIngredientsWithoutChangingTheWorkspaceSchema() {
+        IngredientSpec.Choice choice = new IngredientSpec.Choice(List.of(
+                new IngredientSpec.Item(id("minecraft:stone")),
+                new IngredientSpec.Tag(id("forge:ingots/iron"))));
+        CustomizationEntry recipe = new CustomizationEntry.Compressor(id("test:choice"),
+                OutputTarget.KUBEJS, choice, new ItemStackSpec(id("minecraft:diamond"), 1), 1, 1);
+        WorkspaceSnapshot snapshot = WorkspaceSnapshot.empty().withEntry(recipe);
+
+        String encoded = this.codec.encode(snapshot);
+        WorkspaceDecodeResult result = this.codec.decode(encoded);
+
+        assertThat(result).isEqualTo(new WorkspaceDecodeResult.Success(snapshot));
+        assertThat(encoded).contains("\"schemaVersion\": 1", "\"type\": \"choice\"",
+                "\"alternatives\"");
+    }
+
+    @Test
+    void rejectsChoiceWithFewerThanTwoAlternativesAtThePreciseField() {
+        String content = """
+                {
+                  "schemaVersion": 1,
+                  "entries": [{
+                    "kind": "COMPRESSOR",
+                    "id": "test:choice",
+                    "target": "KUBEJS",
+                    "ingredient": {
+                      "type": "choice",
+                      "alternatives": [{"type":"item","id":"minecraft:stone"}]
+                    },
+                    "result": {"itemId":"minecraft:diamond","count":1},
+                    "inputCount": 1,
+                    "timeCost": 1
+                  }]
+                }
+                """;
+
+        WorkspaceDecodeResult result = this.codec.decode(content);
+
+        assertThat(result).isInstanceOfSatisfying(WorkspaceDecodeResult.Failure.class, failure -> {
+            assertThat(failure.code()).isEqualTo("workspace.ingredient.choice.size");
+            assertThat(failure.fieldPath()).isEqualTo("entries[0].ingredient.alternatives");
+        });
+    }
+
+    @Test
     void rejectsUnknownSchemaWithStructuredFailure() {
         WorkspaceDecodeResult result = this.codec.decode("{\"schemaVersion\":99,\"entries\":[]}");
 

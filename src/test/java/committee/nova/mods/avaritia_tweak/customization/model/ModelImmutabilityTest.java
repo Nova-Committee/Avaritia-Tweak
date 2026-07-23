@@ -34,6 +34,26 @@ class ModelImmutabilityTest {
     }
 
     @Test
+    void copiesAndFlattensChoiceAlternatives() {
+        IngredientSpec stone = new IngredientSpec.Item(id("minecraft:stone"));
+        IngredientSpec dirt = new IngredientSpec.Item(id("minecraft:dirt"));
+        IngredientSpec diamond = new IngredientSpec.Item(id("minecraft:diamond"));
+        List<IngredientSpec> source = new ArrayList<>(List.of(stone, dirt));
+
+        IngredientSpec.Choice choice = new IngredientSpec.Choice(source);
+        source.clear();
+        IngredientSpec.Choice flattened = new IngredientSpec.Choice(List.of(choice, diamond));
+
+        assertThat(choice.alternatives()).containsExactly(stone, dirt);
+        assertThat(flattened.alternatives()).containsExactly(stone, dirt, diamond);
+        assertThatThrownBy(() -> choice.alternatives().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> new IngredientSpec.Choice(List.of(stone)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("at least two");
+    }
+
+    @Test
     void rejectsWorkspaceMapKeysThatDoNotMatchEntries() {
         CustomizationEntry recipe = new CustomizationEntry.ShapelessTable(
                 id("test:recipe"), OutputTarget.KUBEJS, CraftingTier.SCULK,

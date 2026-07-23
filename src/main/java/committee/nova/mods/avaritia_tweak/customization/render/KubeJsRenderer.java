@@ -220,6 +220,11 @@ public final class KubeJsRenderer implements ArtifactRenderer {
     }
 
     static String ingredient(IngredientSpec ingredient) {
+        if (ingredient instanceof IngredientSpec.Choice choice) {
+            return "Ingredient.of([" + choice.alternatives().stream()
+                    .map(KubeJsRenderer::ingredient)
+                    .collect(java.util.stream.Collectors.joining(", ")) + "])";
+        }
         if (ingredient instanceof IngredientSpec.Tag tag) {
             return ScriptEscaper.quote("#" + tag.tagId());
         }

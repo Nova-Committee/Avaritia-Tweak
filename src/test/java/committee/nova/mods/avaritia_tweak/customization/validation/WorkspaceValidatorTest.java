@@ -101,6 +101,22 @@ class WorkspaceValidatorTest {
     }
 
     @Test
+    void validatesEveryChoiceAlternativeAtItsOwnFieldPath() {
+        IngredientSpec.Choice choice = new IngredientSpec.Choice(List.of(
+                item("minecraft:stone"), item("minecraft:missing"), tag("forge:missing")));
+        WorkspaceSnapshot snapshot = snapshot(new CustomizationEntry.Compressor(
+                id("test:choice"), OutputTarget.KUBEJS, choice, result(), 1, 1));
+
+        assertThat(this.validator.validate(snapshot).errors())
+                .extracting(ValidationIssue::fieldPath, ValidationIssue::messageKey)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(
+                                "ingredient.alternatives[1].itemId", "validation.item.missing"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                "ingredient.alternatives[2].tagId", "validation.tag.missing"));
+    }
+
+    @Test
     void rejectsSameTargetSingularityConflictAndWarnsAcrossScripts() {
         CustomizationEntry.SingularityDefinition definition = new CustomizationEntry.SingularityDefinition(
                 id("test:iron"), OutputTarget.KUBEJS, "singularity.iron", 0, 0,

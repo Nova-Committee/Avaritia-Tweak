@@ -1,5 +1,6 @@
 package committee.nova.mods.avaritia_tweak.client.customization.importers;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
@@ -8,14 +9,39 @@ import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.Ingredient;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public final class IngredientImporter {
     public IngredientImportResult importIngredient(Ingredient ingredient, String fieldPath) {
-        JsonElement serialized = ingredient.toJson();
+        return importSerialized(ingredient.toJson(), fieldPath);
+    }
+
+    IngredientImportResult importSerialized(JsonElement serialized, String fieldPath) {
         if (serialized.isJsonArray()) {
-            return failure(fieldPath, "ingredient.or.unsupported",
-                    "Multiple-choice and empty ingredients are not supported");
+            JsonArray encodedAlternatives = serialized.getAsJsonArray();
+            if (encodedAlternatives.size() == 0) {
+                return failure(fieldPath, "ingredient.empty.unsupported",
+                        "Empty ingredients are not supported");
+            }
+            List<IngredientSpec> alternatives = new ArrayList<>();
+            for (int index = 0; index < encodedAlternatives.size(); index++) {
+                IngredientImportResult imported = importSerialized(encodedAlternatives.get(index),
+                        fieldPath + "[" + index + "]");
+                if (imported instanceof IngredientImportResult.Failure) {
+                    return imported;
+                }
+                IngredientSpec ingredient = ((IngredientImportResult.Success) imported).ingredient();
+                if (ingredient instanceof IngredientSpec.Choice nested) {
+                    alternatives.addAll(nested.alternatives());
+                } else {
+                    alternatives.add(ingredient);
+                }
+            }
+            return new IngredientImportResult.Success(alternatives.size() == 1
+                    ? alternatives.get(0)
+                    : new IngredientSpec.Choice(alternatives));
         }
         if (!serialized.isJsonObject()) {
             return failure(fieldPath, "ingredient.format.unsupported",
@@ -28,27 +54,12 @@ public final class IngredientImporter {
                 return failure(fieldPath, "ingredient.custom.invalid",
                         "Custom ingredient type must be a string");
             }
-            if (!type.equals("forge:nbt")) {
-                return failure(fieldPath, "ingredient.custom.unsupported",
+            return switch (type) {
+                case "forge:nbt" -> importNbtIngredient(json, fieldPath);
+                case "forge:compound" -> importCompoundIngredient(json, fieldPath);
+                default -> failure(fieldPath, "ingredient.custom.unsupported",
                         "Unsupported custom ingredient type " + type);
-            }
-            ResourceLocation itemId = resourceLocation(json, "item");
-            if (itemId == null || !json.has("nbt")) {
-                return failure(fieldPath, "ingredient.nbt.invalid",
-                        "Strict NBT ingredient requires item and nbt fields");
-            }
-            try {
-                JsonElement encodedNbt = json.get("nbt");
-                String snbt = encodedNbt.isJsonPrimitive()
-                        ? encodedNbt.getAsString()
-                        : encodedNbt.toString();
-                CompoundTag nbt = TagParser.parseTag(snbt);
-                return new IngredientImportResult.Success(
-                        new IngredientSpec.Item(itemId, Optional.of(nbt)));
-            } catch (Exception exception) {
-                return failure(fieldPath, "ingredient.nbt.invalid",
-                        exception.getMessage() == null ? "Invalid strict NBT" : exception.getMessage());
-            }
+            };
         }
         boolean hasItem = json.has("item");
         boolean hasTag = json.has("tag");
@@ -63,6 +74,35 @@ public final class IngredientImporter {
         return new IngredientImportResult.Success(hasItem
                 ? new IngredientSpec.Item(id)
                 : new IngredientSpec.Tag(id));
+    }
+
+    private IngredientImportResult importCompoundIngredient(JsonObject json, String fieldPath) {
+        JsonElement children = json.has("children") ? json.get("children") : json.get("ingredients");
+        if (children == null || !children.isJsonArray()) {
+            return failure(fieldPath, "ingredient.compound.invalid",
+                    "Compound ingredient requires a children array");
+        }
+        return importSerialized(children, fieldPath);
+    }
+
+    private static IngredientImportResult importNbtIngredient(JsonObject json, String fieldPath) {
+        ResourceLocation itemId = resourceLocation(json, "item");
+        if (itemId == null || !json.has("nbt")) {
+            return failure(fieldPath, "ingredient.nbt.invalid",
+                    "Strict NBT ingredient requires item and nbt fields");
+        }
+        try {
+            JsonElement encodedNbt = json.get("nbt");
+            String snbt = encodedNbt.isJsonPrimitive()
+                    ? encodedNbt.getAsString()
+                    : encodedNbt.toString();
+            CompoundTag nbt = TagParser.parseTag(snbt);
+            return new IngredientImportResult.Success(
+                    new IngredientSpec.Item(itemId, Optional.of(nbt)));
+        } catch (Exception exception) {
+            return failure(fieldPath, "ingredient.nbt.invalid",
+                    exception.getMessage() == null ? "Invalid strict NBT" : exception.getMessage());
+        }
     }
 
     private static ResourceLocation resourceLocation(JsonObject json, String field) {

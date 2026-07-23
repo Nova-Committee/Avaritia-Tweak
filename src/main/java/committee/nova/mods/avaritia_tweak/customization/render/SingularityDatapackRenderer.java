@@ -2,6 +2,8 @@ package committee.nova.mods.avaritia_tweak.customization.render;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
@@ -67,7 +69,15 @@ public final class SingularityDatapackRenderer implements ArtifactRenderer {
         return json;
     }
 
-    static JsonObject ingredient(IngredientSpec ingredient) {
+    static JsonElement ingredient(IngredientSpec ingredient) {
+        if (ingredient instanceof IngredientSpec.Choice choice) {
+            JsonArray alternatives = new JsonArray();
+            choice.alternatives().forEach(value -> alternatives.add(ingredient(value)));
+            JsonObject compound = new JsonObject();
+            compound.addProperty("type", "forge:compound");
+            compound.add("children", alternatives);
+            return compound;
+        }
         JsonObject json = new JsonObject();
         if (ingredient instanceof IngredientSpec.Tag tag) {
             json.addProperty("tag", tag.tagId().toString());

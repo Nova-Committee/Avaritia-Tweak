@@ -68,7 +68,7 @@ public final class GhostIngredientButton extends AbstractButton {
             if (showEmptyMark) {
                 renderCompactMark(graphics, x, y, size, false, EditorTheme.TEXT_MUTED);
             }
-        } else if (current.get() instanceof IngredientSpec.Item item) {
+        } else if (representative(current.orElseThrow()) instanceof IngredientSpec.Item item) {
             Item registered = ForgeRegistries.ITEMS.getValue(item.itemId());
             ItemStack stack = registered == null ? ItemStack.EMPTY : new ItemStack(registered);
             item.strictNbt().ifPresent(stack::setTag);
@@ -76,13 +76,19 @@ public final class GhostIngredientButton extends AbstractButton {
         } else {
             renderCompactMark(graphics, x, y, size, true, EditorTheme.AVARITIA_CYAN);
         }
-        if (current.filter(IngredientSpec.Item.class::isInstance)
-                .map(IngredientSpec.Item.class::cast).flatMap(IngredientSpec.Item::strictNbt).isPresent()) {
+        if (current.map(GhostIngredientButton::representative)
+                .filter(IngredientSpec.Item.class::isInstance)
+                .map(IngredientSpec.Item.class::cast)
+                .flatMap(IngredientSpec.Item::strictNbt).isPresent()) {
             int marker = Math.max(2, Math.min(3, size / 4));
             graphics.fill(x + size - marker - 2, y + 2,
                     x + size - 2, y + 2 + marker,
                     EditorTheme.AVARITIA_RED);
         }
+        current.filter(IngredientSpec.Choice.class::isInstance)
+                .map(IngredientSpec.Choice.class::cast)
+                .ifPresent(choice -> renderChoiceMarker(graphics, x, y, size,
+                        choice.alternatives().size()));
     }
 
     @Override
@@ -91,11 +97,39 @@ public final class GhostIngredientButton extends AbstractButton {
     }
 
     static String describe(IngredientSpec ingredient) {
+        if (ingredient instanceof IngredientSpec.Choice choice) {
+            return choice.alternatives().stream()
+                    .map(GhostIngredientButton::describe)
+                    .collect(java.util.stream.Collectors.joining(" | ", "OR: ", ""));
+        }
         if (ingredient instanceof IngredientSpec.Tag tag) {
             return "#" + tag.tagId();
         }
         IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
         return item.itemId() + (item.strictNbt().isPresent() ? " (strict NBT)" : "");
+    }
+
+    private static IngredientSpec representative(IngredientSpec ingredient) {
+        if (ingredient instanceof IngredientSpec.Choice choice) {
+            return representative(choice.alternatives().get(0));
+        }
+        return ingredient;
+    }
+
+    private static void renderChoiceMarker(GuiGraphics graphics, int x, int y, int size, int count) {
+        if (size < 12) {
+            graphics.fill(x + size - 3, y + size - 3, x + size - 1, y + size - 1,
+                    EditorTheme.AVARITIA_GOLD);
+            return;
+        }
+        String text = Integer.toString(count);
+        int textWidth = Minecraft.getInstance().font.width(text);
+        int markerX = x + size - textWidth - 2;
+        int markerY = y + size - 9;
+        graphics.fill(markerX - 1, markerY - 1, x + size - 1, y + size - 1,
+                EditorTheme.PANEL_DARK);
+        graphics.drawString(Minecraft.getInstance().font, text, markerX, markerY,
+                EditorTheme.AVARITIA_GOLD, false);
     }
 
     private static void renderScaledItem(GuiGraphics graphics, int x, int y, int size, ItemStack stack) {

@@ -76,6 +76,34 @@ class RendererTest {
     }
 
     @Test
+    void rendersChoiceIngredientsWithoutDroppingAlternatives() {
+        IngredientSpec.Choice choice = new IngredientSpec.Choice(List.of(
+                item("minecraft:stone"), item("minecraft:dirt")));
+        CustomizationEntry.ExtremeSmithing kubeRecipe = new CustomizationEntry.ExtremeSmithing(
+                id("test:choice"), OutputTarget.KUBEJS, item("minecraft:stone"),
+                item("minecraft:diamond"), choice, result());
+        CustomizationEntry.ExtremeSmithing craftTweakerRecipe = new CustomizationEntry.ExtremeSmithing(
+                id("test:choice"), OutputTarget.CRAFTTWEAKER, item("minecraft:stone"),
+                item("minecraft:diamond"), choice, result());
+
+        String js = new KubeJsRenderer().render(snapshot(kubeRecipe)).get(0).text();
+        String zs = new CraftTweakerRenderer().render(snapshot(craftTweakerRecipe)).get(0).text();
+        var encoded = SingularityDatapackRenderer.ingredient(choice).getAsJsonObject();
+
+        assertThat(js).contains("avaritia.extreme_smithing(",
+                "Ingredient.of([\"minecraft:stone\", \"minecraft:dirt\"])");
+        assertThat(KubeJsRenderer.ingredient(choice))
+                .isEqualTo("Ingredient.of([\"minecraft:stone\", \"minecraft:dirt\"])");
+        assertThat(zs).contains("(<item:minecraft:stone> | <item:minecraft:dirt>)");
+        assertThat(encoded.get("type").getAsString()).isEqualTo("forge:compound");
+        assertThat(encoded.getAsJsonArray("children")).hasSize(2);
+        assertThat(encoded.getAsJsonArray("children").get(0).getAsJsonObject()
+                .get("item").getAsString()).isEqualTo("minecraft:stone");
+        assertThat(encoded.getAsJsonArray("children").get(1).getAsJsonObject()
+                .get("item").getAsString()).isEqualTo("minecraft:dirt");
+    }
+
+    @Test
     void rendersSingularityOperationsAndCurrentDatapackFields() {
         CustomizationEntry.SingularityDefinition kubeDefinition = definition(
                 "test:kube", OutputTarget.KUBEJS);
