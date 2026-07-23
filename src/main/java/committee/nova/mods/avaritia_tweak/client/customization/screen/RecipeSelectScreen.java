@@ -5,7 +5,6 @@ import committee.nova.mods.avaritia_tweak.client.customization.importers.RecipeI
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -20,13 +19,13 @@ import java.util.Locale;
 import java.util.function.Consumer;
 
 public final class RecipeSelectScreen extends Screen {
-    private static final int PAGE_SIZE = 9;
     private final Screen previous;
     private final OutputTarget target;
     private final Consumer<RecipeImportResult> onImported;
     private final AvaritiaRecipeImporter importer = new AvaritiaRecipeImporter();
     private final List<Recipe<?>> allRecipes = new ArrayList<>();
     private final List<Recipe<?>> filteredRecipes = new ArrayList<>();
+    private final List<RecipeRow> visibleRows = new ArrayList<>();
     private EditBox searchBox;
     private Recipe<?> selected;
     private int page;
@@ -48,35 +47,56 @@ public final class RecipeSelectScreen extends Screen {
             this.loaded = true;
             loadRecipes();
         }
-        int panelWidth = Math.min(380, this.width - 12);
-        int panelHeight = Math.min(224, this.height - 12);
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
-        int listWidth = Math.max(150, panelWidth - 144);
-        int detailX = left + listWidth + 8;
-        int detailWidth = panelWidth - listWidth - 16;
-        this.searchBox = new EditBox(this.font, left + 8, top + 8, listWidth - 16, 20,
-                Component.translatable("gui.avaritia_tweak.search"));
+        Layout layout = layout();
+        this.visibleRows.clear();
+        this.searchBox = new EditBox(this.font, layout.left + 8, layout.top + 40,
+                layout.listWidth - 16, 20, Component.translatable("gui.avaritia_tweak.search"));
         this.searchBox.setValue(this.query);
+        this.searchBox.setHint(Component.translatable("gui.avaritia_tweak.search"));
         this.searchBox.setResponder(this::filter);
         this.addRenderableWidget(this.searchBox);
-        addRecipeButtons(left + 8, top + 36, listWidth - 16);
-        int bottom = top + panelHeight - 22;
-        this.addRenderableWidget(Button.builder(Component.literal("<"), button -> {
+
+        int pageSize = pageSize(layout);
+        int maxPage = maxPage(pageSize);
+        this.page = Math.min(this.page, maxPage);
+        int start = this.page * pageSize;
+        for (int index = start; index < Math.min(this.filteredRecipes.size(), start + pageSize); index++) {
+            Recipe<?> recipe = this.filteredRecipes.get(index);
+            int y = layout.listTop + (index - start) * 22;
+            String id = ScreenText.fit(this.font, recipe.getId().toString(), layout.listWidth - 58);
+            this.addRenderableWidget(EditorButton.builder(Component.literal(id), button -> {
+                        this.selected = recipe;
+                        rebuild();
+                    }).bounds(layout.left + 34, y, layout.listWidth - 42, 20)
+                    .style(EditorButton.Style.LIST).selected(recipe == this.selected).build());
+            this.visibleRows.add(new RecipeRow(recipe, layout.left + 10, y + 1));
+        }
+
+        int actionY = layout.top + layout.height - 30;
+        this.addRenderableWidget(EditorButton.builder(Component.literal("<"), button -> {
             this.page = Math.max(0, this.page - 1);
             rebuild();
-        }).bounds(left + 8, bottom, 34, 18).build());
-        this.addRenderableWidget(Button.builder(Component.literal(">"), button -> {
-            int max = Math.max(0, (this.filteredRecipes.size() - 1) / PAGE_SIZE);
-            this.page = Math.min(max, this.page + 1);
+        }).bounds(layout.left + 8, actionY, 34, 20).style(EditorButton.Style.QUIET).build());
+        this.addRenderableWidget(EditorButton.builder(Component.literal(">"), button -> {
+            this.page = Math.min(maxPage(pageSize), this.page + 1);
             rebuild();
-        }).bounds(left + listWidth - 42, bottom, 34, 18).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.avaritia_tweak.import_recipe"),
-                button -> importSelected()).bounds(detailX, top + panelHeight - 58,
-                detailWidth, 20).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.avaritia_tweak.cancel"),
-                button -> onClose()).bounds(detailX, top + panelHeight - 30,
-                detailWidth, 20).build());
+        }).bounds(layout.left + layout.listWidth - 42, actionY, 34, 20)
+                .style(EditorButton.Style.QUIET).build());
+
+        int detailX = layout.detailX;
+        int detailWidth = layout.detailWidth;
+        int cancelWidth = Math.min(84, detailWidth / 2 - 3);
+        EditorButton importButton = this.addRenderableWidget(EditorButton.builder(
+                        Component.translatable("gui.avaritia_tweak.import_recipe"),
+                        button -> importSelected())
+                .bounds(detailX + cancelWidth + 5, actionY,
+                        detailWidth - cancelWidth - 5, 20)
+                .style(EditorButton.Style.PRIMARY).build());
+        importButton.active = this.selected != null;
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.avaritia_tweak.cancel"),
+                        button -> onClose())
+                .bounds(detailX, actionY, cancelWidth, 20)
+                .style(EditorButton.Style.QUIET).build());
         this.setInitialFocus(this.searchBox);
         this.searchBox.setCursorPosition(this.query.length());
     }
@@ -108,19 +128,10 @@ public final class RecipeSelectScreen extends Screen {
             this.rebuildQueued = true;
             Minecraft.getInstance().execute(() -> {
                 this.rebuildQueued = false;
-                rebuild();
+                if (Minecraft.getInstance().screen == this) {
+                    rebuild();
+                }
             });
-        }
-    }
-
-    private void addRecipeButtons(int x, int y, int width) {
-        int start = this.page * PAGE_SIZE;
-        for (int index = start; index < Math.min(this.filteredRecipes.size(), start + PAGE_SIZE); index++) {
-            Recipe<?> recipe = this.filteredRecipes.get(index);
-            String id = recipe.getId().toString();
-            this.addRenderableWidget(Button.builder(Component.literal(
-                            ScreenText.ellipsize(id, Math.max(12, width / 6))), button -> this.selected = recipe)
-                    .bounds(x, y + (index - start) * 18, width, 17).build());
         }
     }
 
@@ -148,41 +159,112 @@ public final class RecipeSelectScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        int max = Math.max(0, (this.filteredRecipes.size() - 1) / PAGE_SIZE);
-        this.page = Math.max(0, Math.min(max, this.page + (delta < 0 ? 1 : -1)));
+        Layout layout = layout();
+        if (mouseX > layout.left + layout.listWidth) {
+            return false;
+        }
+        int pageSize = pageSize(layout);
+        this.page = Math.max(0, Math.min(maxPage(pageSize),
+                this.page + (delta < 0 ? 1 : -1)));
         rebuild();
         return true;
     }
 
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
-        int panelWidth = Math.min(380, this.width - 12);
-        int panelHeight = Math.min(224, this.height - 12);
+        Layout layout = layout();
+        EditorTheme.renderBackdrop(graphics, this.width, this.height);
+        EditorTheme.renderWindow(graphics, layout.left, layout.top, layout.width, layout.height,
+                EditorTheme.AVARITIA_RED);
+        graphics.drawString(this.font, this.title, layout.left + 10, layout.top + 12,
+                EditorTheme.AVARITIA_GOLD, false);
+        String targetText = this.target.name();
+        EditorTheme.renderBadge(graphics, this.font,
+                layout.left + layout.width - this.font.width(targetText) - 22,
+                layout.top + 9, targetText, EditorTheme.AVARITIA_CYAN);
+
+        EditorTheme.renderSectionHeader(graphics, this.font, layout.left + 2, layout.top + 34,
+                layout.listWidth - 2, Component.translatable("gui.avaritia_tweak.recipe_import.recipes"),
+                Integer.toString(this.filteredRecipes.size()), EditorTheme.AVARITIA_CYAN);
+        EditorTheme.renderPanel(graphics, layout.detailX - 6, layout.top + 34,
+                layout.detailWidth + 12, layout.height - 72, EditorTheme.AVARITIA_GOLD);
+        EditorTheme.renderCanvasGrid(graphics, layout.detailX - 2, layout.top + 38,
+                layout.detailWidth + 4, layout.height - 80);
+        EditorTheme.renderSectionHeader(graphics, this.font, layout.detailX - 4, layout.top + 36,
+                layout.detailWidth + 8,
+                Component.translatable("gui.avaritia_tweak.recipe_import.inspector"), "",
+                EditorTheme.AVARITIA_GOLD);
+        renderRecipeIcons(graphics, mouseX, mouseY);
+        renderSelected(graphics, layout);
+
+        int pageSize = pageSize(layout);
+        graphics.drawCenteredString(this.font,
+                (this.page + 1) + "/" + (maxPage(pageSize) + 1),
+                layout.left + layout.listWidth / 2,
+                layout.top + layout.height - 24, EditorTheme.TEXT_MUTED);
+        super.render(graphics, mouseX, mouseY, partialTick);
+    }
+
+    private void renderRecipeIcons(GuiGraphics graphics, int mouseX, int mouseY) {
+        for (RecipeRow row : this.visibleRows) {
+            EditorTheme.renderSlot(graphics, row.x, row.y, 20, 20,
+                    mouseX >= row.x && mouseX < row.x + 20 && mouseY >= row.y && mouseY < row.y + 20);
+            ItemStack stack = result(row.recipe);
+            graphics.renderItem(stack, row.x + 2, row.y + 2);
+        }
+    }
+
+    private void renderSelected(GuiGraphics graphics, Layout layout) {
+        if (this.selected == null) {
+            graphics.drawWordWrap(this.font,
+                    Component.translatable("gui.avaritia_tweak.recipe_import.select_help"),
+                    layout.detailX, layout.top + 68, layout.detailWidth, EditorTheme.TEXT_MUTED);
+            return;
+        }
+        ItemStack result = result(this.selected);
+        int slotX = layout.detailX;
+        int slotY = layout.top + 68;
+        EditorTheme.renderSlot(graphics, slotX, slotY, 38, 38, false);
+        graphics.renderItem(result, slotX + 11, slotY + 11);
+        graphics.renderItemDecorations(this.font, result, slotX + 11, slotY + 11);
+        graphics.drawString(this.font,
+                ScreenText.fit(this.font, result.getHoverName().getString(), layout.detailWidth - 48),
+                slotX + 46, slotY + 5, EditorTheme.TEXT, false);
+        graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.recipe_import.result"),
+                slotX + 46, slotY + 19, EditorTheme.TEXT_FAINT, false);
+
+        int y = slotY + 54;
+        graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.recipe_import.recipe_id"),
+                layout.detailX, y, EditorTheme.TEXT_MUTED, false);
+        graphics.drawWordWrap(this.font, Component.literal(this.selected.getId().toString()),
+                layout.detailX, y + 13, layout.detailWidth, EditorTheme.AVARITIA_CYAN);
+        graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.recipe_import.handler"),
+                layout.detailX, y + 50, EditorTheme.TEXT_MUTED, false);
+        graphics.drawWordWrap(this.font,
+                Component.literal(this.selected.getClass().getSimpleName()),
+                layout.detailX, y + 63, layout.detailWidth, EditorTheme.SUCCESS);
+    }
+
+    private int pageSize(Layout layout) {
+        return Math.max(1, (layout.detailsBottom - layout.listTop - 4) / 22);
+    }
+
+    private int maxPage(int pageSize) {
+        return Math.max(0, (this.filteredRecipes.size() - 1) / pageSize);
+    }
+
+    private Layout layout() {
+        int panelWidth = Math.min(720, this.width - 12);
+        int panelHeight = Math.min(390, this.height - 12);
         int left = (this.width - panelWidth) / 2;
         int top = (this.height - panelHeight) / 2;
-        int listWidth = Math.max(150, panelWidth - 144);
-        int detailX = left + listWidth + 8;
-        int detailWidth = panelWidth - listWidth - 16;
-        graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xee171a21);
-        graphics.drawString(this.font, this.title, detailX, top + 12, 0xfff0c66a, false);
-        int max = Math.max(0, (this.filteredRecipes.size() - 1) / PAGE_SIZE);
-        graphics.drawCenteredString(this.font, (this.page + 1) + "/" + (max + 1),
-                left + listWidth / 2, top + panelHeight - 17, 0xffaeb6c6);
-        if (this.selected != null) {
-            ItemStack result = result(this.selected);
-            graphics.renderItem(result, detailX, top + 44);
-            graphics.drawString(this.font,
-                    ScreenText.ellipsize(result.getHoverName().getString(),
-                            Math.max(8, detailWidth / 6 - 3)),
-                    detailX + 22, top + 48, 0xffffffff, false);
-            graphics.drawWordWrap(this.font, Component.literal(this.selected.getId().toString()),
-                    detailX, top + 72, detailWidth, 0xffaeb6c6);
-            graphics.drawWordWrap(this.font,
-                    Component.literal(this.selected.getClass().getSimpleName()),
-                    detailX, top + 104, detailWidth, 0xff78d6a3);
-        }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        int listWidth = Math.max(210, Math.min(410, panelWidth * 3 / 5));
+        int detailX = left + listWidth + 10;
+        int detailWidth = panelWidth - listWidth - 18;
+        int listTop = top + 66;
+        int detailsBottom = top + panelHeight - 38;
+        return new Layout(left, top, panelWidth, panelHeight, listWidth,
+                detailX, detailWidth, listTop, detailsBottom);
     }
 
     @Override
@@ -190,4 +272,10 @@ public final class RecipeSelectScreen extends Screen {
         Minecraft.getInstance().setScreen(this.previous);
     }
 
+    private record RecipeRow(Recipe<?> recipe, int x, int y) {
+    }
+
+    private record Layout(int left, int top, int width, int height, int listWidth,
+                          int detailX, int detailWidth, int listTop, int detailsBottom) {
+    }
 }

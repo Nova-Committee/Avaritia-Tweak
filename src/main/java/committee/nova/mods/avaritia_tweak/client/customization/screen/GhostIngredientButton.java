@@ -34,14 +34,12 @@ public final class GhostIngredientButton extends AbstractButton {
 
     @Override
     protected void renderWidget(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        int border = this.isHoveredOrFocused() ? 0xffd6a84b : 0xff5a6170;
-        graphics.fill(this.getX(), this.getY(), this.getX() + this.width, this.getY() + this.height, border);
-        graphics.fill(this.getX() + 1, this.getY() + 1, this.getX() + this.width - 1,
-                this.getY() + this.height - 1, 0xff20242d);
+        EditorTheme.renderSlot(graphics, this.getX(), this.getY(), this.width, this.height,
+                this.isHoveredOrFocused());
         Optional<IngredientSpec> current = this.value.get();
         if (current.isEmpty()) {
             graphics.drawCenteredString(Minecraft.getInstance().font, "+",
-                    this.getX() + 9, this.getY() + 5, 0xff8d96a8);
+                    this.getX() + 9, this.getY() + 5, EditorTheme.TEXT_MUTED);
         } else if (current.get() instanceof IngredientSpec.Item item) {
             Item registered = ForgeRegistries.ITEMS.getValue(item.itemId());
             ItemStack stack = registered == null ? ItemStack.EMPTY : new ItemStack(registered);
@@ -49,7 +47,12 @@ public final class GhostIngredientButton extends AbstractButton {
             graphics.renderItem(stack, this.getX() + 1, this.getY() + 1);
         } else {
             graphics.drawCenteredString(Minecraft.getInstance().font, "#",
-                    this.getX() + 9, this.getY() + 5, 0xff73c7ec);
+                    this.getX() + 9, this.getY() + 5, EditorTheme.AVARITIA_CYAN);
+        }
+        if (current.filter(IngredientSpec.Item.class::isInstance)
+                .map(IngredientSpec.Item.class::cast).flatMap(IngredientSpec.Item::strictNbt).isPresent()) {
+            graphics.fill(this.getX() + 13, this.getY() + 2, this.getX() + 16, this.getY() + 5,
+                    EditorTheme.AVARITIA_RED);
         }
         if (this.isHovered()) {
             graphics.renderTooltip(Minecraft.getInstance().font,

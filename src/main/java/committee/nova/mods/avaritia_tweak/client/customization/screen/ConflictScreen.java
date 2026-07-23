@@ -6,7 +6,6 @@ import committee.nova.mods.avaritia_tweak.customization.render.ArtifactPath;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
@@ -22,6 +21,7 @@ public final class ConflictScreen extends Screen {
     private final Screen previous;
     private final List<FileConflict> conflicts;
     private final Consumer<SortedMap<ArtifactPath, FileObservation>> onTakeover;
+    private String status = "";
 
     public ConflictScreen(Screen previous, List<FileConflict> conflicts,
                           Consumer<SortedMap<ArtifactPath, FileObservation>> onTakeover) {
@@ -33,33 +33,40 @@ public final class ConflictScreen extends Screen {
 
     @Override
     protected void init() {
-        int panelWidth = Math.min(380, this.width - 12);
-        int panelHeight = Math.min(208, this.height - 12);
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
+        Layout layout = layout();
         int gap = 4;
-        int buttonWidth = (panelWidth - 16 - gap * 3) / 4;
-        int buttonY = top + panelHeight - 30;
-        this.addRenderableWidget(Button.builder(
-                Component.translatable("gui.avaritia_tweak.conflict.takeover"),
-                button -> takeover()).bounds(left + 8, buttonY, buttonWidth, 20).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.avaritia_tweak.copy_paths"),
-                button -> Minecraft.getInstance().keyboardHandler.setClipboard(paths()))
-                .bounds(left + 8 + (buttonWidth + gap), buttonY, buttonWidth, 20).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.avaritia_tweak.open_path"),
-                button -> openFirstPath())
-                .bounds(left + 8 + (buttonWidth + gap) * 2, buttonY, buttonWidth, 20).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.avaritia_tweak.cancel"),
-                button -> onClose())
-                .bounds(left + 8 + (buttonWidth + gap) * 3, buttonY, buttonWidth, 20).build());
+        int buttonWidth = (layout.width - 16 - gap * 3) / 4;
+        int buttonY = layout.top + layout.height - 30;
+        this.addRenderableWidget(EditorButton.builder(
+                        Component.translatable("gui.avaritia_tweak.conflict.takeover"),
+                        button -> takeover())
+                .bounds(layout.left + 8, buttonY, buttonWidth, 20)
+                .style(EditorButton.Style.DANGER).build());
+        this.addRenderableWidget(EditorButton.builder(
+                        Component.translatable("gui.avaritia_tweak.copy_paths"), button -> copyPaths())
+                .bounds(layout.left + 8 + buttonWidth + gap, buttonY, buttonWidth, 20)
+                .style(EditorButton.Style.QUIET).build());
+        EditorButton open = this.addRenderableWidget(EditorButton.builder(
+                        Component.translatable("gui.avaritia_tweak.open_path"), button -> openFirstPath())
+                .bounds(layout.left + 8 + (buttonWidth + gap) * 2, buttonY, buttonWidth, 20)
+                .style(EditorButton.Style.DEFAULT).build());
+        open.active = !this.conflicts.isEmpty();
+        this.addRenderableWidget(EditorButton.builder(
+                        Component.translatable("gui.avaritia_tweak.cancel"), button -> onClose())
+                .bounds(layout.left + 8 + (buttonWidth + gap) * 3, buttonY, buttonWidth, 20)
+                .style(EditorButton.Style.QUIET).build());
     }
 
     private void takeover() {
         TreeMap<ArtifactPath, FileObservation> confirmations = new TreeMap<>();
-        this.conflicts.forEach(conflict ->
-                confirmations.put(conflict.logicalPath(), conflict.actual()));
+        this.conflicts.forEach(conflict -> confirmations.put(conflict.logicalPath(), conflict.actual()));
         Minecraft.getInstance().setScreen(this.previous);
         this.onTakeover.accept(confirmations);
+    }
+
+    private void copyPaths() {
+        Minecraft.getInstance().keyboardHandler.setClipboard(paths());
+        this.status = Component.translatable("gui.avaritia_tweak.conflict.paths_copied").getString();
     }
 
     private void openFirstPath() {
@@ -77,30 +84,59 @@ public final class ConflictScreen extends Screen {
 
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
-        int panelWidth = Math.min(380, this.width - 12);
-        int panelHeight = Math.min(208, this.height - 12);
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
-        graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xf0171a21);
-        graphics.drawString(this.font, this.title, left + 8, top + 8, 0xffff6b6b, false);
+        Layout layout = layout();
+        EditorTheme.renderBackdrop(graphics, this.width, this.height);
+        EditorTheme.renderWindow(graphics, layout.left, layout.top, layout.width, layout.height,
+                EditorTheme.ERROR);
+        graphics.drawString(this.font, this.title, layout.left + 10, layout.top + 12,
+                EditorTheme.ERROR, false);
+        String badge = Component.translatable("gui.avaritia_tweak.conflict.count",
+                this.conflicts.size()).getString();
+        EditorTheme.renderBadge(graphics, this.font,
+                layout.left + layout.width - this.font.width(badge) - 22,
+                layout.top + 9, badge, EditorTheme.ERROR);
+
+        int contentX = layout.left + 10;
+        int contentWidth = layout.width - 20;
+        graphics.fill(contentX - 2, layout.top + 34, contentX + contentWidth + 2,
+                layout.top + 76, 0xff35252a);
+        graphics.fill(contentX - 2, layout.top + 34, contentX + 1,
+                layout.top + 76, EditorTheme.ERROR);
         graphics.drawWordWrap(this.font,
                 Component.translatable("gui.avaritia_tweak.conflict.explanation"),
-                left + 8, top + 24, panelWidth - 16, 0xffffc76b);
-        int y = top + 52;
-        int rows = Math.max(1, Math.min(6, (panelHeight - 92) / 20));
+                contentX + 6, layout.top + 42, contentWidth - 12, EditorTheme.WARNING);
+
+        int y = layout.top + 84;
+        int rows = Math.max(1, Math.min(6, (layout.height - 132) / 30));
         for (int index = 0; index < Math.min(rows, this.conflicts.size()); index++) {
             FileConflict conflict = this.conflicts.get(index);
+            graphics.fill(contentX, y, contentX + contentWidth, y + 26, EditorTheme.BORDER_DARK);
+            graphics.fill(contentX + 1, y + 1, contentX + contentWidth - 1, y + 25,
+                    index % 2 == 0 ? EditorTheme.PANEL : EditorTheme.PANEL_RAISED);
+            graphics.fill(contentX + 1, y + 1, contentX + 4, y + 25, EditorTheme.ERROR);
             graphics.drawString(this.font,
-                    ScreenText.ellipsize(conflict.reason() + "  " + conflict.logicalPath().value(),
-                            Math.max(18, panelWidth / 7)),
-                    left + 8, y, 0xffd7dbe5, false);
+                    ScreenText.fit(this.font,
+                            conflict.reason() + "  |  " + conflict.logicalPath().value(),
+                            contentWidth - 14),
+                    contentX + 8, y + 4, EditorTheme.TEXT, false);
             graphics.drawString(this.font,
-                    ScreenText.ellipsize(conflict.actualPath().toString(), Math.max(18, panelWidth / 6)),
-                    left + 16, y + 10, 0xff8d96a8, false);
-            y += 20;
+                    ScreenText.fit(this.font, conflict.actualPath().toString(), contentWidth - 18),
+                    contentX + 8, y + 15, EditorTheme.TEXT_FAINT, false);
+            y += 30;
+        }
+        if (!this.status.isEmpty()) {
+            graphics.drawString(this.font, ScreenText.fit(this.font, this.status, contentWidth),
+                    contentX, layout.top + layout.height - 42, EditorTheme.SUCCESS, false);
         }
         super.render(graphics, mouseX, mouseY, partialTick);
+    }
+
+    private Layout layout() {
+        int panelWidth = Math.min(560, this.width - 12);
+        int panelHeight = Math.min(310, this.height - 12);
+        int left = (this.width - panelWidth) / 2;
+        int top = (this.height - panelHeight) / 2;
+        return new Layout(left, top, panelWidth, panelHeight);
     }
 
     @Override
@@ -108,4 +144,6 @@ public final class ConflictScreen extends Screen {
         Minecraft.getInstance().setScreen(this.previous);
     }
 
+    private record Layout(int left, int top, int width, int height) {
+    }
 }

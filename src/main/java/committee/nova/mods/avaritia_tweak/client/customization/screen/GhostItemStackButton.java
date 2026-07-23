@@ -33,10 +33,8 @@ public final class GhostItemStackButton extends AbstractButton {
 
     @Override
     protected void renderWidget(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        int border = this.isHoveredOrFocused() ? 0xffd6a84b : 0xff5a6170;
-        graphics.fill(this.getX(), this.getY(), this.getX() + this.width, this.getY() + this.height, border);
-        graphics.fill(this.getX() + 1, this.getY() + 1, this.getX() + this.width - 1,
-                this.getY() + this.height - 1, 0xff20242d);
+        EditorTheme.renderSlot(graphics, this.getX(), this.getY(), this.width, this.height,
+                this.isHoveredOrFocused());
         ItemStackSpec current = this.value.get();
         Item registered = ForgeRegistries.ITEMS.getValue(current.itemId());
         ItemStack stack = registered == null

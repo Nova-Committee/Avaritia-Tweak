@@ -2,13 +2,13 @@ package committee.nova.mods.avaritia_tweak.client.customization.screen;
 
 import committee.nova.mods.avaritia_tweak.client.customization.EditorController;
 import committee.nova.mods.avaritia_tweak.customization.diff.ChangeType;
+import committee.nova.mods.avaritia_tweak.customization.diff.EntryChange;
 import committee.nova.mods.avaritia_tweak.customization.diff.WorkspaceDiff;
 import committee.nova.mods.avaritia_tweak.customization.diff.WorkspaceDiffer;
 import committee.nova.mods.avaritia_tweak.customization.history.RepositoryException;
 import committee.nova.mods.avaritia_tweak.customization.history.Revision;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
@@ -20,10 +20,11 @@ import java.util.Collections;
 import java.util.List;
 
 public final class HistoryScreen extends Screen {
-    private static final int PAGE_SIZE = 8;
+    private static final int TIMELINE_WIDTH = 236;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter
             .ofPattern("yyyy-MM-dd HH:mm:ss")
             .withZone(ZoneId.systemDefault());
+
     private final Screen previous;
     private final EditorController controller;
     private final WorkspaceDiffer differ = new WorkspaceDiffer();
@@ -42,39 +43,46 @@ public final class HistoryScreen extends Screen {
     @Override
     protected void init() {
         loadHistory();
-        int panelWidth = Math.min(460, this.width - 12);
-        int panelHeight = Math.min(250, this.height - 12);
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
-        int listWidth = Math.min(224, Math.max(132, panelWidth / 2));
-        int start = this.page * PAGE_SIZE;
-        for (int index = start; index < Math.min(this.revisions.size(), start + PAGE_SIZE); index++) {
+        Layout layout = layout();
+        int pageSize = pageSize(layout);
+        int maxPage = maxPage(pageSize);
+        this.page = Math.min(this.page, maxPage);
+        int start = this.page * pageSize;
+        for (int index = start; index < Math.min(this.revisions.size(), start + pageSize); index++) {
             Revision revision = this.revisions.get(index);
             int row = index - start;
-            String marker = revision == this.selected ? "> " : "";
-            Component label = Component.literal(marker + "v" + revision.version() + "  "
-                    + ScreenText.ellipsize(revision.message(), Math.max(8, listWidth / 7 - 6)));
-            this.addRenderableWidget(Button.builder(label, button -> {
+            String message = ScreenText.fit(this.font, revision.message(), layout.timelineWidth - 74);
+            Component label = Component.literal("v" + revision.version() + "  " + message);
+            this.addRenderableWidget(EditorButton.builder(label, button -> {
                 this.selected = revision;
                 rebuild();
-            }).bounds(left + 8, top + 28 + row * 21, listWidth - 16, 19).build());
+            }).bounds(layout.left + 28, layout.listTop + row * 22,
+                    layout.timelineWidth - 38, 20)
+                    .style(EditorButton.Style.LIST).selected(revision == this.selected).build());
         }
-        int bottom = top + panelHeight - 28;
-        this.addRenderableWidget(Button.builder(Component.literal("<"), button -> {
+
+        int actionY = layout.top + layout.height - 30;
+        this.addRenderableWidget(EditorButton.builder(Component.literal("<"), button -> {
             this.page = Math.max(0, this.page - 1);
             rebuild();
-        }).bounds(left + 8, bottom, 32, 20).build());
-        this.addRenderableWidget(Button.builder(Component.literal(">"), button -> {
-            int max = Math.max(0, (this.revisions.size() - 1) / PAGE_SIZE);
-            this.page = Math.min(max, this.page + 1);
+        }).bounds(layout.left + 8, actionY, 30, 20).style(EditorButton.Style.QUIET).build());
+        this.addRenderableWidget(EditorButton.builder(Component.literal(">"), button -> {
+            this.page = Math.min(maxPage(pageSize), this.page + 1);
             rebuild();
-        }).bounds(left + listWidth - 40, bottom, 32, 20).build());
-        Button inspect = this.addRenderableWidget(Button.builder(
-                Component.translatable("gui.avaritia_tweak.history.inspect"), button -> openSelected())
-                .bounds(left + panelWidth - 160, bottom, 72, 20).build());
+        }).bounds(layout.left + 44, actionY, 30, 20)
+                .style(EditorButton.Style.QUIET).build());
+
+        int closeWidth = 76;
+        int inspectWidth = 96;
+        EditorButton inspect = this.addRenderableWidget(EditorButton.builder(
+                        Component.translatable("gui.avaritia_tweak.history.inspect"), button -> openSelected())
+                .bounds(layout.left + layout.width - closeWidth - inspectWidth - 18,
+                        actionY, inspectWidth, 20).style(EditorButton.Style.PRIMARY).build());
         inspect.active = this.selected != null;
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.avaritia_tweak.close"),
-                button -> onClose()).bounds(left + panelWidth - 82, bottom, 74, 20).build());
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.avaritia_tweak.close"),
+                        button -> onClose())
+                .bounds(layout.left + layout.width - closeWidth - 8, actionY, closeWidth, 20)
+                .style(EditorButton.Style.QUIET).build());
     }
 
     private void loadHistory() {
@@ -109,63 +117,176 @@ public final class HistoryScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        int max = Math.max(0, (this.revisions.size() - 1) / PAGE_SIZE);
-        this.page = Math.max(0, Math.min(max, this.page + (delta < 0 ? 1 : -1)));
+        Layout layout = layout();
+        if (mouseX > layout.left + layout.timelineWidth) {
+            return false;
+        }
+        int pageSize = pageSize(layout);
+        this.page = Math.max(0, Math.min(maxPage(pageSize),
+                this.page + (delta < 0 ? 1 : -1)));
         rebuild();
         return true;
     }
 
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
-        int panelWidth = Math.min(460, this.width - 12);
-        int panelHeight = Math.min(250, this.height - 12);
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
-        int listWidth = Math.min(224, Math.max(132, panelWidth / 2));
-        graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xf0171a21);
-        graphics.drawString(this.font, this.title, left + 8, top + 9, 0xfff0c66a, false);
-        int max = Math.max(0, (this.revisions.size() - 1) / PAGE_SIZE);
-        graphics.drawCenteredString(this.font, (this.page + 1) + "/" + (max + 1),
-                left + listWidth / 2, top + panelHeight - 22, 0xffaeb6c6);
-        if (this.selected == null) {
-            Component empty = this.status.isEmpty()
-                    ? Component.translatable("gui.avaritia_tweak.history.empty")
-                    : Component.literal(ScreenText.ellipsize(this.status, 44));
-            graphics.drawWordWrap(this.font, empty, left + listWidth + 8, top + 30,
-                    panelWidth - listWidth - 16, 0xffffc76b);
+        Layout layout = layout();
+        EditorTheme.renderBackdrop(graphics, this.width, this.height);
+        EditorTheme.renderWindow(graphics, layout.left, layout.top, layout.width, layout.height,
+                EditorTheme.AVARITIA_RED);
+        graphics.drawString(this.font, this.title, layout.left + 10, layout.top + 12,
+                EditorTheme.AVARITIA_GOLD, false);
+        String local = Component.translatable("gui.avaritia_tweak.history.local").getString();
+        EditorTheme.renderBadge(graphics, this.font,
+                layout.left + layout.width - this.font.width(local) - 22,
+                layout.top + 9, local, EditorTheme.AVARITIA_CYAN);
+
+        EditorTheme.renderSectionHeader(graphics, this.font, layout.left + 2, layout.top + 34,
+                layout.timelineWidth - 2, Component.translatable("gui.avaritia_tweak.history.timeline"),
+                Integer.toString(this.revisions.size()), EditorTheme.AVARITIA_CYAN);
+        renderTimeline(graphics, layout);
+
+        if (layout.wide) {
+            int detailsX = layout.detailsX;
+            int detailsWidth = layout.detailsWidth;
+            EditorTheme.renderPanel(graphics, detailsX - 6, layout.top + 34,
+                    detailsWidth + 12, layout.detailsBottom - layout.top - 34, EditorTheme.AVARITIA_GOLD);
+            EditorTheme.renderCanvasGrid(graphics, detailsX - 2, layout.top + 38,
+                    detailsWidth + 4, layout.detailsBottom - layout.top - 42);
+            EditorTheme.renderSectionHeader(graphics, this.font, detailsX - 4, layout.top + 36,
+                    detailsWidth + 8, Component.translatable("gui.avaritia_tweak.history.details"),
+                    this.selected == null ? "" : "v" + this.selected.version(), EditorTheme.AVARITIA_GOLD);
+
+            if (this.selected == null) {
+                Component empty = this.status.isEmpty()
+                        ? Component.translatable("gui.avaritia_tweak.history.empty")
+                        : Component.literal(ScreenText.fit(this.font, this.status, detailsWidth));
+                graphics.drawWordWrap(this.font, empty, detailsX, layout.top + 64,
+                        detailsWidth, this.status.isEmpty() ? EditorTheme.TEXT_MUTED : EditorTheme.ERROR);
+            } else {
+                renderDetails(graphics, layout);
+            }
         } else {
-            renderDetails(graphics, left + listWidth + 8, top + 30,
-                    panelWidth - listWidth - 16);
+            renderCompactDetails(graphics, layout);
         }
+
+        int pageSize = pageSize(layout);
+        int pageX = layout.wide ? layout.left + 112 : layout.left + 94;
+        graphics.drawCenteredString(this.font, (this.page + 1) + "/" + (maxPage(pageSize) + 1),
+                pageX, layout.top + layout.height - 24, EditorTheme.TEXT_MUTED);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderDetails(GuiGraphics graphics, int x, int y, int width) {
-        WorkspaceDiff rollbackDiff = this.differ.diff(this.controller.committed(), this.selected.snapshot());
-        graphics.drawString(this.font, "Version " + this.selected.version(), x, y,
-                0xff78d6a3, false);
-        graphics.drawString(this.font, TIME_FORMAT.format(this.selected.committedAt()), x, y + 14,
-                0xff8d96a8, false);
-        graphics.drawWordWrap(this.font, Component.literal(this.selected.message()), x, y + 30,
-                width, 0xffd7dbe5);
-        graphics.drawString(this.font, "Original: +" + this.selected.summary().added()
-                + "  ~" + this.selected.summary().modified()
-                + "  -" + this.selected.summary().removed(), x, y + 68, 0xffaeb6c6, false);
-        graphics.drawString(this.font, "Rollback: +" + rollbackDiff.count(ChangeType.ADDED)
-                + "  ~" + rollbackDiff.count(ChangeType.MODIFIED)
-                + "  -" + rollbackDiff.count(ChangeType.REMOVED), x, y + 82, 0xfff0c66a, false);
-        graphics.drawString(this.font, "Artifacts: " + this.selected.artifacts().artifacts().size(),
-                x, y + 96, 0xffaeb6c6, false);
-        this.selected.rollbackOf().ifPresent(version -> graphics.drawString(this.font,
-                "Rollback of v" + version, x, y + 110, 0xffffc76b, false));
-        int changeY = y + 126;
-        for (int index = 0; index < Math.min(5, rollbackDiff.entries().size()); index++) {
-            var change = rollbackDiff.entries().get(index);
-            graphics.drawString(this.font,
-                    ScreenText.ellipsize(change.type() + " " + change.key(), Math.max(12, width / 6)),
-                    x, changeY + index * 11, 0xffc8ceda, false);
+    private void renderTimeline(GuiGraphics graphics, Layout layout) {
+        int pageSize = pageSize(layout);
+        int start = this.page * pageSize;
+        int count = Math.min(pageSize, this.revisions.size() - start);
+        if (count <= 0) {
+            return;
         }
+        int lineX = layout.left + 18;
+        graphics.fill(lineX, layout.listTop + 9, lineX + 2,
+                layout.listTop + (count - 1) * 22 + 11, 0xff59616d);
+        for (int row = 0; row < count; row++) {
+            Revision revision = this.revisions.get(start + row);
+            int y = layout.listTop + row * 22 + 7;
+            int color = revision == this.selected ? EditorTheme.AVARITIA_CYAN : EditorTheme.BORDER;
+            graphics.fill(lineX - 3, y, lineX + 5, y + 8, EditorTheme.BORDER_DARK);
+            graphics.fill(lineX - 2, y + 1, lineX + 4, y + 7, color);
+            if (revision.rollbackOf().isPresent()) {
+                graphics.fill(lineX, y + 3, lineX + 2, y + 5, EditorTheme.AVARITIA_RED);
+            }
+        }
+    }
+
+    private void renderDetails(GuiGraphics graphics, Layout layout) {
+        int x = layout.detailsX;
+        int width = layout.detailsWidth;
+        int y = layout.top + 64;
+        WorkspaceDiff rollbackDiff = this.differ.diff(this.controller.committed(), this.selected.snapshot());
+
+        graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.history.version",
+                this.selected.version()), x, y, EditorTheme.SUCCESS, false);
+        graphics.drawString(this.font, TIME_FORMAT.format(this.selected.committedAt()),
+                x, y + 13, EditorTheme.TEXT_FAINT, false);
+        this.selected.rollbackOf().ifPresent(version -> EditorTheme.renderBadge(graphics, this.font,
+                x + width - this.font.width("v" + version) - 62, y - 3,
+                Component.translatable("gui.avaritia_tweak.history.rollback_of", version).getString(),
+                EditorTheme.AVARITIA_RED));
+
+        graphics.drawWordWrap(this.font, Component.literal(this.selected.message()),
+                x, y + 31, width, EditorTheme.TEXT);
+        int summaryY = y + 68;
+        graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.history.original"),
+                x, summaryY, EditorTheme.TEXT_MUTED, false);
+        EditorTheme.renderChangeSummary(graphics, this.font, x, summaryY + 12,
+                this.selected.summary().added(), this.selected.summary().modified(),
+                this.selected.summary().removed());
+        graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.history.rollback_impact"),
+                x, summaryY + 32, EditorTheme.TEXT_MUTED, false);
+        EditorTheme.renderChangeSummary(graphics, this.font, x, summaryY + 44,
+                rollbackDiff.count(ChangeType.ADDED), rollbackDiff.count(ChangeType.MODIFIED),
+                rollbackDiff.count(ChangeType.REMOVED));
+
+        int changeY = summaryY + 68;
+        graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.history.affected_entries",
+                        rollbackDiff.entries().size(), this.selected.artifacts().artifacts().size()),
+                x, changeY, EditorTheme.TEXT_MUTED, false);
+        int available = Math.max(0, Math.min(7,
+                (layout.detailsBottom - changeY - 20) / 12));
+        for (int index = 0; index < Math.min(available, rollbackDiff.entries().size()); index++) {
+            EntryChange change = rollbackDiff.entries().get(index);
+            String value = EditorTheme.changeMark(change.type()) + "  " + change.key().id();
+            graphics.drawString(this.font, ScreenText.fit(this.font, value, width),
+                    x, changeY + 14 + index * 12, EditorTheme.changeColor(change.type()), false);
+        }
+    }
+
+    private void renderCompactDetails(GuiGraphics graphics, Layout layout) {
+        int y = layout.detailsBottom + 6;
+        int width = layout.width - 20;
+        graphics.fill(layout.left + 8, layout.detailsBottom + 2,
+                layout.left + layout.width - 8, layout.top + layout.height - 36, EditorTheme.PANEL_DARK);
+        graphics.fill(layout.left + 8, layout.detailsBottom + 2,
+                layout.left + 11, layout.top + layout.height - 36, EditorTheme.AVARITIA_GOLD);
+        if (this.selected == null) {
+            Component empty = this.status.isEmpty()
+                    ? Component.translatable("gui.avaritia_tweak.history.empty")
+                    : Component.literal(this.status);
+            graphics.drawString(this.font, ScreenText.fit(this.font, empty.getString(), width - 10),
+                    layout.left + 16, y + 7, EditorTheme.TEXT_MUTED, false);
+            return;
+        }
+        graphics.drawString(this.font, "v" + this.selected.version() + "  "
+                        + ScreenText.fit(this.font, this.selected.message(), width - 82),
+                layout.left + 16, y + 3, EditorTheme.TEXT, false);
+        graphics.drawString(this.font, TIME_FORMAT.format(this.selected.committedAt()),
+                layout.left + 16, y + 15, EditorTheme.TEXT_FAINT, false);
+    }
+
+    private int pageSize(Layout layout) {
+        return Math.max(1, (layout.detailsBottom - layout.listTop - 4) / 22);
+    }
+
+    private int maxPage(int pageSize) {
+        return Math.max(0, (this.revisions.size() - 1) / pageSize);
+    }
+
+    private Layout layout() {
+        int panelWidth = Math.min(720, this.width - 12);
+        int panelHeight = Math.min(390, this.height - 12);
+        int left = (this.width - panelWidth) / 2;
+        int top = (this.height - panelHeight) / 2;
+        boolean wide = panelWidth >= 560;
+        int timelineWidth = wide
+                ? Math.min(TIMELINE_WIDTH, Math.max(150, panelWidth / 3))
+                : panelWidth - 4;
+        int detailsX = wide ? left + timelineWidth + 10 : left + 10;
+        int detailsWidth = wide ? panelWidth - timelineWidth - 18 : panelWidth - 20;
+        int listTop = top + 58;
+        int detailsBottom = top + panelHeight - (wide ? 38 : 72);
+        return new Layout(left, top, panelWidth, panelHeight, wide, timelineWidth,
+                detailsX, detailsWidth, listTop, detailsBottom);
     }
 
     @Override
@@ -173,4 +294,7 @@ public final class HistoryScreen extends Screen {
         Minecraft.getInstance().setScreen(this.previous);
     }
 
+    private record Layout(int left, int top, int width, int height, boolean wide, int timelineWidth,
+                          int detailsX, int detailsWidth, int listTop, int detailsBottom) {
+    }
 }
