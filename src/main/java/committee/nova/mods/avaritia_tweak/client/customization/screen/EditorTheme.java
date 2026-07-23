@@ -93,17 +93,20 @@ final class EditorTheme {
 
     static void renderStatusBar(GuiGraphics graphics, Font font, int y, int width,
                                 String left, String center, String right, int statusColor) {
+        int edgeInset = width >= 160 ? 42 : 9;
         graphics.fill(0, y, width, y + 18, 0xff181a20);
         graphics.fill(0, y, width, y + 1, 0xff505661);
         graphics.fill(0, y, 4, y + 18, AVARITIA_RED);
-        graphics.drawString(font, ScreenText.fit(font, left, Math.max(20, width / 3 - 12)),
-                9, y + 5, statusColor, false);
+        graphics.drawString(font, ScreenText.fit(font, left,
+                        Math.max(20, width / 3 - edgeInset - 4)),
+                edgeInset, y + 5, statusColor, false);
         if (!center.isBlank() && width >= 420) {
             String fitted = ScreenText.fit(font, center, width / 3);
             graphics.drawCenteredString(font, fitted, width / 2, y + 5, TEXT_MUTED);
         }
-        String fittedRight = ScreenText.fit(font, right, Math.max(20, width / 3 - 12));
-        graphics.drawString(font, fittedRight, width - 8 - font.width(fittedRight), y + 5,
+        String fittedRight = ScreenText.fit(font, right,
+                Math.max(20, width / 3 - edgeInset - 4));
+        graphics.drawString(font, fittedRight, width - edgeInset - font.width(fittedRight), y + 5,
                 AVARITIA_CYAN, false);
     }
 

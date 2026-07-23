@@ -223,15 +223,21 @@ public final class PreviewScreen extends Screen {
         PreviewArtifact current = current();
         RenderedArtifact artifact = current.artifact();
         String logicalPath = artifact.logicalPath().value();
-        graphics.drawString(this.font, ScreenText.fit(this.font, logicalPath, layout.codeWidth - 90),
-                layout.codeX, layout.headerY, EditorTheme.TEXT, false);
         String state = current.change().map(type -> Component.translatable(
                 "gui.avaritia_tweak.change." + type.name().toLowerCase(java.util.Locale.ROOT)).getString())
                 .orElse(Component.translatable("gui.avaritia_tweak.change.unchanged").getString());
         int stateColor = current.change().map(EditorTheme::changeColor).orElse(EditorTheme.TEXT_MUTED);
+        int headerX = layout.wide ? layout.codeX : layout.codeX + 34;
+        int headerWidth = layout.wide ? layout.codeWidth : layout.codeWidth - 68;
+        String fittedState = ScreenText.fit(this.font, state,
+                Math.max(24, Math.min(120, headerWidth / 2 - 8)));
+        int badgeWidth = this.font.width(fittedState) + 8;
+        graphics.drawString(this.font,
+                ScreenText.fit(this.font, logicalPath, Math.max(0, headerWidth - badgeWidth - 6)),
+                headerX, layout.headerY, EditorTheme.TEXT, false);
         EditorTheme.renderBadge(graphics, this.font,
-                layout.codeX + layout.codeWidth - this.font.width(state) - 10,
-                layout.headerY - 3, state, stateColor);
+                headerX + headerWidth - badgeWidth,
+                layout.headerY - 3, fittedState, stateColor);
         String destination = this.pathResolver.resolveArtifact(artifact.logicalPath()).toString();
         graphics.drawString(this.font, ScreenText.fit(this.font, destination, layout.codeWidth - 4),
                 layout.codeX, layout.headerY + 13, EditorTheme.TEXT_FAINT, false);

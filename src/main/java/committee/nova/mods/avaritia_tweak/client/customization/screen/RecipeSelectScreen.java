@@ -49,7 +49,7 @@ public final class RecipeSelectScreen extends Screen {
         }
         Layout layout = layout();
         this.visibleRows.clear();
-        this.searchBox = new EditBox(this.font, layout.left + 8, layout.top + 40,
+        this.searchBox = new EditBox(this.font, layout.left + 8, layout.top + 58,
                 layout.listWidth - 16, 20, Component.translatable("gui.avaritia_tweak.search"));
         this.searchBox.setValue(this.query);
         this.searchBox.setHint(Component.translatable("gui.avaritia_tweak.search"));
@@ -261,7 +261,7 @@ public final class RecipeSelectScreen extends Screen {
         int listWidth = Math.max(210, Math.min(410, panelWidth * 3 / 5));
         int detailX = left + listWidth + 10;
         int detailWidth = panelWidth - listWidth - 18;
-        int listTop = top + 66;
+        int listTop = top + 84;
         int detailsBottom = top + panelHeight - 38;
         return new Layout(left, top, panelWidth, panelHeight, listWidth,
                 detailX, detailWidth, listTop, detailsBottom);

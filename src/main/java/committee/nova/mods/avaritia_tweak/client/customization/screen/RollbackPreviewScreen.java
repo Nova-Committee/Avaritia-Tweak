@@ -240,12 +240,18 @@ public final class RollbackPreviewScreen extends Screen {
         }
         RenderedArtifact artifact = current();
         String logicalPath = artifact.logicalPath().value();
-        graphics.drawString(this.font, ScreenText.fit(this.font, logicalPath, layout.codeWidth - 100),
-                layout.codeX, layout.headerY, EditorTheme.TEXT, false);
         String state = Component.translatable("gui.avaritia_tweak.rollback.historical").getString();
+        int headerX = layout.wide ? layout.codeX : layout.codeX + 34;
+        int headerWidth = layout.wide ? layout.codeWidth : layout.codeWidth - 68;
+        String fittedState = ScreenText.fit(this.font, state,
+                Math.max(24, Math.min(120, headerWidth / 2 - 8)));
+        int badgeWidth = this.font.width(fittedState) + 8;
+        graphics.drawString(this.font,
+                ScreenText.fit(this.font, logicalPath, Math.max(0, headerWidth - badgeWidth - 6)),
+                headerX, layout.headerY, EditorTheme.TEXT, false);
         EditorTheme.renderBadge(graphics, this.font,
-                layout.codeX + layout.codeWidth - this.font.width(state) - 10,
-                layout.headerY - 3, state, EditorTheme.AVARITIA_RED);
+                headerX + headerWidth - badgeWidth,
+                layout.headerY - 3, fittedState, EditorTheme.AVARITIA_RED);
         String destination = this.pathResolver.resolveArtifact(artifact.logicalPath()).toString();
         graphics.drawString(this.font, ScreenText.fit(this.font, destination, layout.codeWidth - 4),
                 layout.codeX, layout.headerY + 13, EditorTheme.TEXT_FAINT, false);
