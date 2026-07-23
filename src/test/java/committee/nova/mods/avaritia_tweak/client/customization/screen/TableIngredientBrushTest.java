@@ -1,7 +1,9 @@
 package committee.nova.mods.avaritia_tweak.client.customization.screen;
 
 import committee.nova.mods.avaritia_tweak.client.customization.EntryForm;
+import committee.nova.mods.avaritia_tweak.client.customization.EntryFormException;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
+import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.EntryKind;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import net.minecraft.resources.ResourceLocation;
@@ -28,6 +30,18 @@ class TableIngredientBrushTest {
         assertThat(form.grid()).hasSize(9);
         assertThat(form.grid().get(0)).isEqualTo(DIAMOND);
         assertThat(form.grid().get(8)).isEqualTo(STONE);
+    }
+
+    @Test
+    void catalystPreservingRecipeSharesThePositionedBrushBehavior() throws EntryFormException {
+        EntryForm form = EntryForm.newEntry(EntryKind.NO_CONSUME_CATALYST_SHAPED);
+        form.tier(CraftingTier.SCULK);
+        TableIngredientBrush brush = selected(STONE);
+
+        assertThat(brush.apply(form, 4)).isTrue();
+        assertThat(brush.fillEmpty(form)).isEqualTo(8);
+        assertThat(form.grid()).hasSize(9);
+        assertThat(form.build()).isInstanceOf(CustomizationEntry.NoConsumeCatalystShaped.class);
     }
 
     @Test

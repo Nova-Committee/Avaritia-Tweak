@@ -18,6 +18,7 @@ import java.util.TreeMap;
 public final class EntryForm {
     private EntryKind kind;
     private String idText;
+    private String note;
     private OutputTarget target;
     private CraftingTier tier;
     private final TreeMap<Integer, IngredientSpec> grid = new TreeMap<>();
@@ -43,6 +44,7 @@ public final class EntryForm {
         ResourceLocation stone = ResourceLocation.tryParse("minecraft:stone");
         this.kind = kind;
         this.idText = "avaritia_tweak:new_entry";
+        this.note = "";
         this.target = OutputTarget.KUBEJS;
         this.tier = CraftingTier.EXTREME;
         this.ingredient = new IngredientSpec.Item(stone);
@@ -70,8 +72,13 @@ public final class EntryForm {
     public static EntryForm from(CustomizationEntry entry) {
         EntryForm form = new EntryForm(entry.kind());
         form.idText = entry.id().toString();
+        form.note = entry.note();
         form.target = entry.target();
         if (entry instanceof CustomizationEntry.ShapedTable shaped) {
+            form.tier = shaped.tier();
+            form.grid.putAll(shaped.ingredients());
+            form.result = shaped.result();
+        } else if (entry instanceof CustomizationEntry.NoConsumeCatalystShaped shaped) {
             form.tier = shaped.tier();
             form.grid.putAll(shaped.ingredients());
             form.result = shaped.result();
@@ -118,19 +125,21 @@ public final class EntryForm {
             throw new EntryFormException("id", "Invalid resource ID");
         }
         return switch (this.kind) {
-            case SHAPED_TABLE -> new CustomizationEntry.ShapedTable(id, this.target, this.tier,
+            case SHAPED_TABLE -> new CustomizationEntry.ShapedTable(id, this.target, this.note, this.tier,
                     this.grid, this.result);
-            case SHAPELESS_TABLE -> new CustomizationEntry.ShapelessTable(id, this.target, this.tier,
+            case NO_CONSUME_CATALYST_SHAPED -> new CustomizationEntry.NoConsumeCatalystShaped(
+                    id, this.target, this.note, this.tier, this.grid, this.result);
+            case SHAPELESS_TABLE -> new CustomizationEntry.ShapelessTable(id, this.target, this.note, this.tier,
                     this.ingredients, this.result);
-            case COMPRESSOR -> new CustomizationEntry.Compressor(id, this.target, this.ingredient,
+            case COMPRESSOR -> new CustomizationEntry.Compressor(id, this.target, this.note, this.ingredient,
                     this.result, this.inputCount, this.timeCost);
-            case EXTREME_SMITHING -> new CustomizationEntry.ExtremeSmithing(id, this.target,
+            case EXTREME_SMITHING -> new CustomizationEntry.ExtremeSmithing(id, this.target, this.note,
                     this.template, this.base, this.addition, this.result);
-            case INFINITY_CATALYST -> new CustomizationEntry.InfinityCatalyst(id, this.target,
+            case INFINITY_CATALYST -> new CustomizationEntry.InfinityCatalyst(id, this.target, this.note,
                     this.group, this.ingredients, this.count);
-            case ETERNAL_SINGULARITY -> new CustomizationEntry.EternalSingularity(id, this.target,
+            case ETERNAL_SINGULARITY -> new CustomizationEntry.EternalSingularity(id, this.target, this.note,
                     this.ingredients, this.count);
-            case SINGULARITY_DEFINITION -> new CustomizationEntry.SingularityDefinition(id, this.target,
+            case SINGULARITY_DEFINITION -> new CustomizationEntry.SingularityDefinition(id, this.target, this.note,
                     this.displayName, this.overlayColor, this.underlayColor, this.count, this.timeCost,
                     this.ingredient, this.enabled, this.recipeEnabled);
             case SINGULARITY_OPERATION -> {
@@ -142,7 +151,8 @@ public final class EntryForm {
                     }
                     singularityId = Optional.of(parsed);
                 }
-                yield new CustomizationEntry.SingularityOperation(id, this.target, this.action, singularityId);
+                yield new CustomizationEntry.SingularityOperation(
+                        id, this.target, this.note, this.action, singularityId);
             }
         };
     }
@@ -157,6 +167,14 @@ public final class EntryForm {
 
     public void idText(String idText) {
         this.idText = idText;
+    }
+
+    public String note() {
+        return this.note;
+    }
+
+    public void note(String note) {
+        this.note = note;
     }
 
     public OutputTarget target() {

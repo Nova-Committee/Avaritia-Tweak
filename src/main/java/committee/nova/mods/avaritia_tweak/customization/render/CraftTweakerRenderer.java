@@ -184,6 +184,10 @@ public final class CraftTweakerRenderer implements ArtifactRenderer {
         if (ingredient instanceof IngredientSpec.Tag tag) {
             return "<tag:items:" + tag.tagId() + ">";
         }
+        if (ingredient instanceof IngredientSpec.Components) {
+            throw new IllegalArgumentException(
+                    "NeoForge component predicates cannot be rendered losslessly for CraftTweaker");
+        }
         IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
         String base = "<item:" + item.itemId() + ">";
         return item.strictNbt()

@@ -1,7 +1,6 @@
 package committee.nova.mods.avaritia_tweak.client.customization.screen;
 
 import committee.nova.mods.avaritia_tweak.client.customization.EntryForm;
-import committee.nova.mods.avaritia_tweak.customization.model.EntryKind;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 
 import java.util.List;
@@ -33,14 +32,14 @@ final class TableIngredientBrush {
         if (ingredient == null || slot < 0 || slot >= form.tier().capacity()) {
             return false;
         }
-        if (form.kind() == EntryKind.SHAPED_TABLE) {
+        if (form.kind().usesShapedGrid()) {
             if (ingredient.equals(form.grid().get(slot))) {
                 return false;
             }
             form.gridIngredient(slot, Optional.of(ingredient));
             return true;
         }
-        if (form.kind() != EntryKind.SHAPELESS_TABLE) {
+        if (!form.kind().usesTableGrid()) {
             return false;
         }
 
@@ -63,7 +62,7 @@ final class TableIngredientBrush {
         if (ingredient == null) {
             return 0;
         }
-        if (form.kind() == EntryKind.SHAPED_TABLE) {
+        if (form.kind().usesShapedGrid()) {
             int changed = 0;
             for (int slot = 0; slot < form.tier().capacity(); slot++) {
                 if (!form.grid().containsKey(slot)) {
@@ -73,7 +72,7 @@ final class TableIngredientBrush {
             }
             return changed;
         }
-        if (form.kind() != EntryKind.SHAPELESS_TABLE) {
+        if (!form.kind().usesTableGrid()) {
             return 0;
         }
 

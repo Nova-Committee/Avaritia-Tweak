@@ -122,23 +122,30 @@ public final class IngredientImporter {
     }
 
     private static IngredientImportResult importComponentIngredient(JsonObject json, String fieldPath) {
-        if (!json.has("strict") || !json.get("strict").isJsonPrimitive()
-                || !json.getAsJsonPrimitive("strict").isBoolean()
-                || !json.get("strict").getAsBoolean()) {
-            return failure(fieldPath, "ingredient.components.unsupported",
-                    "Only strict NeoForge component ingredients are supported");
+        boolean strict = false;
+        if (json.has("strict")) {
+            if (!json.get("strict").isJsonPrimitive()
+                    || !json.getAsJsonPrimitive("strict").isBoolean()) {
+                return failure(fieldPath, "ingredient.components.invalid",
+                        "Component ingredient strict flag must be a boolean");
+            }
+            strict = json.get("strict").getAsBoolean();
         }
         ResourceLocation itemId = singleItem(json.get("items"));
         if (itemId == null || !json.has("components") || !json.get("components").isJsonObject()) {
             return failure(fieldPath, "ingredient.components.invalid",
-                    "Strict component ingredient requires one item and a components object");
+                    "Component ingredient requires one item and a components object");
         }
         JsonObject components = json.getAsJsonObject("components");
-        if (components.size() != 1 || !components.has("minecraft:custom_data")) {
-            return failure(fieldPath, "ingredient.components.unsupported",
-                    "Only the minecraft:custom_data component can be edited");
+        if (components.size() == 0) {
+            return failure(fieldPath, "ingredient.components.invalid",
+                    "Component ingredient cannot use an empty components object");
         }
-        return strictItem(itemId, components.get("minecraft:custom_data"), fieldPath);
+        if (strict && components.size() == 1 && components.has("minecraft:custom_data")) {
+            return strictItem(itemId, components.get("minecraft:custom_data"), fieldPath);
+        }
+        return new IngredientImportResult.Success(
+                new IngredientSpec.Components(itemId, components.toString(), strict));
     }
 
     private static IngredientImportResult importLegacyNbtIngredient(JsonObject json, String fieldPath) {

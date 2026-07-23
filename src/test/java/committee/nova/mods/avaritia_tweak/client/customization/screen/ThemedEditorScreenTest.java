@@ -13,7 +13,10 @@ class ThemedEditorScreenTest {
     @Test
     void standaloneEditorScreensShareTheProtectedBackgroundPass() {
         List<Class<?>> screens = List.of(
+                ColorPickerScreen.class,
                 ConflictScreen.class,
+                EntryCompareScreen.class,
+                EntryTypeSelectScreen.class,
                 HistoryScreen.class,
                 IngredientEditorScreen.class,
                 ItemStackEditorScreen.class,

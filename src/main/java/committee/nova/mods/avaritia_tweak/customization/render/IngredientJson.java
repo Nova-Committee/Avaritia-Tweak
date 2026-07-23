@@ -3,6 +3,7 @@ package committee.nova.mods.avaritia_tweak.customization.render;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 
@@ -20,6 +21,13 @@ final class IngredientJson {
         JsonObject json = new JsonObject();
         if (ingredient instanceof IngredientSpec.Tag tag) {
             json.addProperty("tag", tag.tagId().toString());
+            return json;
+        }
+        if (ingredient instanceof IngredientSpec.Components components) {
+            json.addProperty("type", "neoforge:components");
+            json.addProperty("items", components.itemId().toString());
+            json.add("components", JsonParser.parseString(components.componentsJson()));
+            json.addProperty("strict", components.strict());
             return json;
         }
         IngredientSpec.Item item = (IngredientSpec.Item) ingredient;

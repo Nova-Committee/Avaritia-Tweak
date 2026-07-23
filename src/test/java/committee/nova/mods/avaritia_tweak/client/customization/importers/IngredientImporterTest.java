@@ -91,7 +91,7 @@ class IngredientImporterTest {
     }
 
     @Test
-    void importsMultipleChoiceAndStillRejectsUnknownCustomIngredientsWithFieldLocation() {
+    void importsMultipleChoiceAndComponentPredicatesAndStillRejectsUnknownCustomIngredients() {
         IngredientImportResult multiple = importJson("""
                 [{"item":"minecraft:stone"},{"item":"minecraft:dirt"}]
                 """);
@@ -117,8 +117,13 @@ class IngredientImporterTest {
         });
         assertThat(malformed).isInstanceOfSatisfying(IngredientImportResult.Failure.class,
                 failure -> assertThat(failure.code()).isEqualTo("ingredient.id.invalid"));
-        assertThat(partialComponents).isInstanceOfSatisfying(IngredientImportResult.Failure.class,
-                failure -> assertThat(failure.code()).isEqualTo("ingredient.components.unsupported"));
+        assertThat(partialComponents).isInstanceOfSatisfying(IngredientImportResult.Success.class,
+                success -> assertThat(success.ingredient())
+                        .isInstanceOfSatisfying(IngredientSpec.Components.class, components -> {
+                            assertThat(components.itemId().toString()).isEqualTo("minecraft:stone");
+                            assertThat(components.componentsJson()).contains("minecraft:custom_data");
+                            assertThat(components.strict()).isFalse();
+                        }));
     }
 
     private IngredientImportResult importJson(String json) {

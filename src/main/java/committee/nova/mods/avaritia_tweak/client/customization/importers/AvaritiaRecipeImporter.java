@@ -4,8 +4,10 @@ import committee.nova.mods.avaritia.common.crafting.recipe.CompressorRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.EternalSingularityCraftRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ExtremeSmithingRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.InfinityCatalystCraftRecipe;
+import committee.nova.mods.avaritia.common.crafting.recipe.NoConsumeCatalystShapedRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ShapedTableCraftingRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ShapelessTableCraftingRecipe;
+import committee.nova.mods.avaritia.core.singularity.Singularity;
 import committee.nova.mods.avaritia_tweak.customization.minecraft.MinecraftItemStacks;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
@@ -64,6 +66,24 @@ public final class AvaritiaRecipeImporter {
         return importRecipe(holder.id(), holder.value(), target, registryAccess);
     }
 
+    public RecipeImportResult importSingularity(Singularity singularity, OutputTarget target) {
+        ResourceLocation id = singularity.getRegistryName();
+        IngredientImportResult imported = this.ingredientImporter.importIngredient(
+                singularity.getIngredient(), "ingredient");
+        if (imported instanceof IngredientImportResult.Failure importFailure) {
+            return failure(id, importFailure);
+        }
+        IngredientSpec ingredient = ((IngredientImportResult.Success) imported).ingredient();
+        if (target == OutputTarget.CRAFTTWEAKER && containsComponents(ingredient)) {
+            return failure(id, "ingredient", "ingredient.components.target_unsupported",
+                    "NeoForge data-component predicates require KubeJS or a data pack");
+        }
+        return new RecipeImportResult.Success(new CustomizationEntry.SingularityDefinition(
+                id, target, singularity.getDisplayName(), singularity.getOverlayColor(),
+                singularity.getUnderlayColor(), singularity.getRealCount(), singularity.getTimeCost(),
+                ingredient, singularity.isEnabled(), singularity.isRecipeEnabled()));
+    }
+
     RecipeImportResult importRecipe(ResourceLocation recipeId, Recipe<?> recipe, OutputTarget target,
                                     RegistryAccess registryAccess) {
         if (target == OutputTarget.DATAPACK) {
@@ -77,8 +97,15 @@ public final class AvaritiaRecipeImporter {
             if (recipe instanceof EternalSingularityCraftRecipe eternal) {
                 return importEternal(recipeId, eternal, target, registryAccess);
             }
+            if (recipe instanceof NoConsumeCatalystShapedRecipe shaped) {
+                if (target != OutputTarget.KUBEJS) {
+                    return failure(recipeId, "target", "recipe.target.unsupported",
+                            "Catalyst-preserving shaped recipes can only target KubeJS");
+                }
+                return importShaped(recipeId, shaped, target, registryAccess, true);
+            }
             if (recipe instanceof ShapedTableCraftingRecipe shaped) {
-                return importShaped(recipeId, shaped, target, registryAccess);
+                return importShaped(recipeId, shaped, target, registryAccess, false);
             }
             if (recipe instanceof ShapelessTableCraftingRecipe shapeless) {
                 return importShapeless(recipeId, shapeless, target, registryAccess);
@@ -101,6 +128,11 @@ public final class AvaritiaRecipeImporter {
                 if (imported.failure != null) {
                     return imported.failure;
                 }
+                if (target == OutputTarget.CRAFTTWEAKER
+                        && imported.ingredients.stream().anyMatch(AvaritiaRecipeImporter::containsComponents)) {
+                    return failure(recipeId, "addition", "ingredient.components.target_unsupported",
+                            "NeoForge data-component predicates require KubeJS");
+                }
                 return new RecipeImportResult.Success(new CustomizationEntry.ExtremeSmithing(recipeId, target,
                         imported.ingredients.get(0), imported.ingredients.get(1), imported.ingredients.get(2),
                         itemStack(smithing.getResultItem(registryAccess))));
@@ -114,7 +146,8 @@ public final class AvaritiaRecipeImporter {
     }
 
     private RecipeImportResult importShaped(ResourceLocation recipeId, ShapedTableCraftingRecipe recipe,
-                                            OutputTarget target, RegistryAccess registryAccess) {
+                                            OutputTarget target, RegistryAccess registryAccess,
+                                            boolean catalystPreserving) {
         Optional<CraftingTier> tier = CraftingTier.fromValue(recipe.getTier());
         if (tier.isEmpty()) {
             return failure(recipeId, "tier", "recipe.tier.unsupported", "Unsupported table tier");
@@ -137,8 +170,11 @@ public final class AvaritiaRecipeImporter {
                         ((IngredientImportResult.Success) imported).ingredient());
             }
         }
-        return new RecipeImportResult.Success(new CustomizationEntry.ShapedTable(recipeId, target,
-                tier.get(), grid, itemStack(recipe.getResultItem(registryAccess))));
+        ItemStackSpec result = itemStack(recipe.getResultItem(registryAccess));
+        CustomizationEntry entry = catalystPreserving
+                ? new CustomizationEntry.NoConsumeCatalystShaped(recipeId, target, tier.get(), grid, result)
+                : new CustomizationEntry.ShapedTable(recipeId, target, tier.get(), grid, result);
+        return new RecipeImportResult.Success(entry);
     }
 
     private RecipeImportResult importShapeless(ResourceLocation recipeId, ShapelessTableCraftingRecipe recipe,
@@ -193,6 +229,14 @@ public final class AvaritiaRecipeImporter {
 
     private ItemStackSpec itemStack(ItemStack stack) {
         return this.itemStacks.read(stack);
+    }
+
+    private static boolean containsComponents(IngredientSpec ingredient) {
+        if (ingredient instanceof IngredientSpec.Components) {
+            return true;
+        }
+        return ingredient instanceof IngredientSpec.Choice choice
+                && choice.alternatives().stream().anyMatch(AvaritiaRecipeImporter::containsComponents);
     }
 
     private static DecodedSpecial decodeCatalystNetwork(InfinityCatalystCraftRecipe recipe,

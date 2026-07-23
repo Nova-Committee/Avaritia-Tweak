@@ -43,6 +43,8 @@ class WorkspaceValidatorTest {
         WorkspaceSnapshot snapshot = snapshot(
                 new CustomizationEntry.ShapedTable(id("test:shaped"), OutputTarget.KUBEJS,
                         CraftingTier.SCULK, new TreeMap<>(Map.of(0, item("minecraft:stone"))), result()),
+                new CustomizationEntry.NoConsumeCatalystShaped(id("test:keep_catalyst"), OutputTarget.KUBEJS,
+                        CraftingTier.SCULK, new TreeMap<>(Map.of(0, item("minecraft:stone"))), result()),
                 new CustomizationEntry.ShapelessTable(id("test:shapeless"), OutputTarget.CRAFTTWEAKER,
                         CraftingTier.NETHER, List.of(tag("forge:ingots/iron")), result()),
                 new CustomizationEntry.Compressor(id("test:compressor"), OutputTarget.KUBEJS,
@@ -65,6 +67,18 @@ class WorkspaceValidatorTest {
 
         assertThat(report.isValid()).isTrue();
         assertThat(report.errors()).isEmpty();
+    }
+
+    @Test
+    void catalystPreservingRecipeOnlyAcceptsKubeJsTarget() {
+        CustomizationEntry recipe = new CustomizationEntry.NoConsumeCatalystShaped(
+                id("test:keep_catalyst"), OutputTarget.CRAFTTWEAKER, CraftingTier.SCULK,
+                new TreeMap<>(Map.of(0, item("minecraft:stone"))), result());
+
+        assertThat(this.validator.validate(snapshot(recipe)).errors())
+                .extracting(ValidationIssue::fieldPath, ValidationIssue::messageKey)
+                .contains(org.assertj.core.groups.Tuple.tuple(
+                        "target", "validation.target.unsupported"));
     }
 
     @Test
@@ -114,6 +128,21 @@ class WorkspaceValidatorTest {
                                 "ingredient.alternatives[1].itemId", "validation.item.missing"),
                         org.assertj.core.groups.Tuple.tuple(
                                 "ingredient.alternatives[2].tagId", "validation.tag.missing"));
+    }
+
+    @Test
+    void componentPredicatesRequireKubeJsOrDatapackTargets() {
+        IngredientSpec.Components components = new IngredientSpec.Components(id("minecraft:stone"),
+                "{\"minecraft:custom_data\":{\"mode\":\"exact\"}}", false);
+        CustomizationEntry craftTweaker = new CustomizationEntry.Compressor(
+                id("test:components"), OutputTarget.CRAFTTWEAKER, components, result(), 1, 1);
+        CustomizationEntry kubeJs = new CustomizationEntry.Compressor(
+                id("test:components_kube"), OutputTarget.KUBEJS, components, result(), 1, 1);
+
+        assertThat(this.validator.validate(snapshot(craftTweaker)).errors())
+                .extracting(ValidationIssue::messageKey)
+                .contains("validation.target.components_unsupported");
+        assertThat(this.validator.validate(snapshot(kubeJs)).isValid()).isTrue();
     }
 
     @Test

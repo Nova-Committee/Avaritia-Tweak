@@ -10,6 +10,7 @@ import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -17,17 +18,35 @@ import java.util.function.Supplier;
 public final class GhostItemStackButton extends AbstractButton {
     private final Supplier<ItemStackSpec> value;
     private final Consumer<GhostItemStackButton> onPress;
+    private final SecondaryPressHandler<GhostItemStackButton> onSecondaryPress;
 
     public GhostItemStackButton(int x, int y, Supplier<ItemStackSpec> value,
                                 Consumer<GhostItemStackButton> onPress) {
+        this(x, y, value, onPress, null);
+    }
+
+    GhostItemStackButton(int x, int y, Supplier<ItemStackSpec> value,
+                         Consumer<GhostItemStackButton> onPress,
+                         SecondaryPressHandler<GhostItemStackButton> onSecondaryPress) {
         super(x, y, 18, 18, Component.translatable("gui.avaritia_tweak.ghost_result"));
         this.value = value;
         this.onPress = onPress;
+        this.onSecondaryPress = onSecondaryPress;
     }
 
     @Override
     public void onPress() {
         this.onPress.accept(this);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && this.active && this.visible
+                && this.onSecondaryPress != null && this.isMouseOver(mouseX, mouseY)) {
+            this.onSecondaryPress.onPress(this, mouseX, mouseY);
+            return true;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override

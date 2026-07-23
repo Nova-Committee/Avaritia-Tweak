@@ -2,13 +2,16 @@ package committee.nova.mods.avaritia_tweak.customization.render;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
 import committee.nova.mods.avaritia_tweak.customization.model.SingularityAction;
 import committee.nova.mods.avaritia_tweak.customization.model.WorkspaceSnapshot;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -114,6 +117,8 @@ public final class KubeJsRenderer implements ArtifactRenderer {
     private static void renderRecipe(StringBuilder script, CustomizationEntry entry) {
         if (entry instanceof CustomizationEntry.ShapedTable shaped) {
             renderShaped(script, shaped);
+        } else if (entry instanceof CustomizationEntry.NoConsumeCatalystShaped shaped) {
+            renderNoConsumeCatalystShaped(script, shaped);
         } else if (entry instanceof CustomizationEntry.ShapelessTable shapeless) {
             script.append("    avaritia.shapeless_table(\n")
                     .append("        ").append(itemStack(shapeless.result())).append(",\n")
@@ -164,9 +169,7 @@ public final class KubeJsRenderer implements ArtifactRenderer {
         recipe.add("base", IngredientJson.encode(smithing.base()));
         recipe.add("addition", IngredientJson.encode(smithing.addition()));
         recipe.add("result", IngredientJson.stack(smithing.result()));
-        String encoded = JSON.toJson(recipe).replace("\n", "\n    ");
-        script.append("    event.custom(").append(encoded).append(")\n")
-                .append("        .id(").append(ScriptEscaper.quote(smithing.id().toString())).append(");\n");
+        renderCustomRecipe(script, smithing.id(), recipe);
     }
 
     private static boolean isPlainItem(IngredientSpec ingredient) {
@@ -174,15 +177,55 @@ public final class KubeJsRenderer implements ArtifactRenderer {
     }
 
     private static void renderShaped(StringBuilder script, CustomizationEntry.ShapedTable shaped) {
-        if (shaped.ingredients().isEmpty()) {
-            throw new IllegalArgumentException("Cannot render an empty shaped recipe: " + shaped.id());
+        ShapedProjection projection = projectShaped(shaped.id(), shaped.tier(), shaped.ingredients());
+        script.append("    avaritia.shaped_table(\n")
+                .append("        ").append(shaped.tier().value()).append(",\n")
+                .append("        ").append(itemStack(shaped.result())).append(",\n")
+                .append("        [\n");
+        for (int index = 0; index < projection.pattern().size(); index++) {
+            script.append("            ").append(ScriptEscaper.quote(projection.pattern().get(index)));
+            script.append(index < projection.pattern().size() - 1 ? ",\n" : "\n");
         }
-        int size = shaped.tier().gridSize();
+        script.append("        ],\n")
+                .append("        {\n");
+        int index = 0;
+        for (Map.Entry<IngredientSpec, Character> symbol : projection.symbols().entrySet()) {
+            script.append("            ").append(ScriptEscaper.quote(symbol.getValue().toString()))
+                    .append(": ").append(ingredient(symbol.getKey()));
+            script.append(index++ < projection.symbols().size() - 1 ? ",\n" : "\n");
+        }
+        script.append("        }\n")
+                .append("    ).id(").append(ScriptEscaper.quote(shaped.id().toString())).append(");\n");
+    }
+
+    private static void renderNoConsumeCatalystShaped(
+            StringBuilder script, CustomizationEntry.NoConsumeCatalystShaped shaped) {
+        ShapedProjection projection = projectShaped(shaped.id(), shaped.tier(), shaped.ingredients());
+        JsonObject recipe = new JsonObject();
+        recipe.addProperty("type", "avaritia:no_consume_catalyst_shaped");
+        JsonArray pattern = new JsonArray();
+        projection.pattern().forEach(pattern::add);
+        recipe.add("pattern", pattern);
+        JsonObject key = new JsonObject();
+        projection.symbols().forEach((ingredient, symbol) ->
+                key.add(symbol.toString(), IngredientJson.encode(ingredient)));
+        recipe.add("key", key);
+        recipe.add("result", IngredientJson.stack(shaped.result()));
+        recipe.addProperty("tier", shaped.tier().value());
+        renderCustomRecipe(script, shaped.id(), recipe);
+    }
+
+    private static ShapedProjection projectShaped(ResourceLocation recipeId, CraftingTier tier,
+                                                   Map<Integer, IngredientSpec> ingredients) {
+        if (ingredients.isEmpty()) {
+            throw new IllegalArgumentException("Cannot render an empty shaped recipe: " + recipeId);
+        }
+        int size = tier.gridSize();
         int minRow = size;
         int maxRow = -1;
         int minColumn = size;
         int maxColumn = -1;
-        for (int slot : shaped.ingredients().keySet()) {
+        for (int slot : ingredients.keySet()) {
             int row = slot / size;
             int column = slot % size;
             minRow = Math.min(minRow, row);
@@ -196,14 +239,14 @@ public final class KubeJsRenderer implements ArtifactRenderer {
         for (int row = minRow; row <= maxRow; row++) {
             StringBuilder patternRow = new StringBuilder();
             for (int column = minColumn; column <= maxColumn; column++) {
-                IngredientSpec ingredient = shaped.ingredients().get(row * size + column);
+                IngredientSpec ingredient = ingredients.get(row * size + column);
                 if (ingredient == null) {
                     patternRow.append(' ');
                 } else {
                     Character symbol = symbols.get(ingredient);
                     if (symbol == null) {
                         if (symbols.size() >= SHAPED_SYMBOLS.size()) {
-                            throw new IllegalArgumentException("Too many unique shaped ingredients: " + shaped.id());
+                            throw new IllegalArgumentException("Too many unique shaped ingredients: " + recipeId);
                         }
                         symbol = SHAPED_SYMBOLS.get(symbols.size());
                         symbols.put(ingredient, symbol);
@@ -213,25 +256,14 @@ public final class KubeJsRenderer implements ArtifactRenderer {
             }
             pattern.add(patternRow.toString());
         }
+        return new ShapedProjection(List.copyOf(pattern),
+                java.util.Collections.unmodifiableMap(new LinkedHashMap<>(symbols)));
+    }
 
-        script.append("    avaritia.shaped_table(\n")
-                .append("        ").append(shaped.tier().value()).append(",\n")
-                .append("        ").append(itemStack(shaped.result())).append(",\n")
-                .append("        [\n");
-        for (int index = 0; index < pattern.size(); index++) {
-            script.append("            ").append(ScriptEscaper.quote(pattern.get(index)));
-            script.append(index < pattern.size() - 1 ? ",\n" : "\n");
-        }
-        script.append("        ],\n")
-                .append("        {\n");
-        int index = 0;
-        for (Map.Entry<IngredientSpec, Character> symbol : symbols.entrySet()) {
-            script.append("            ").append(ScriptEscaper.quote(symbol.getValue().toString()))
-                    .append(": ").append(ingredient(symbol.getKey()));
-            script.append(index++ < symbols.size() - 1 ? ",\n" : "\n");
-        }
-        script.append("        }\n")
-                .append("    ).id(").append(ScriptEscaper.quote(shaped.id().toString())).append(");\n");
+    private static void renderCustomRecipe(StringBuilder script, ResourceLocation recipeId, JsonObject recipe) {
+        String encoded = JSON.toJson(recipe).replace("\n", "\n    ");
+        script.append("    event.custom(").append(encoded).append(")\n")
+                .append("        .id(").append(ScriptEscaper.quote(recipeId.toString())).append(");\n");
     }
 
     private static void appendIngredientArray(StringBuilder script, List<IngredientSpec> ingredients,
@@ -254,6 +286,10 @@ public final class KubeJsRenderer implements ArtifactRenderer {
         }
         if (ingredient instanceof IngredientSpec.Tag tag) {
             return ScriptEscaper.quote("#" + tag.tagId());
+        }
+        if (ingredient instanceof IngredientSpec.Components components) {
+            return "Ingredient.withData(" + ScriptEscaper.quote(components.itemId().toString())
+                    + ", " + components.componentsJson() + ", " + components.strict() + ")";
         }
         IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
         return item.strictNbt()
@@ -298,5 +334,8 @@ public final class KubeJsRenderer implements ArtifactRenderer {
             }
         }
         return List.copyOf(symbols);
+    }
+
+    private record ShapedProjection(List<String> pattern, Map<IngredientSpec, Character> symbols) {
     }
 }

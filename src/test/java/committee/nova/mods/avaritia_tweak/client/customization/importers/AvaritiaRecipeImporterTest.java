@@ -4,8 +4,10 @@ import committee.nova.mods.avaritia.common.crafting.recipe.CompressorRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.EternalSingularityCraftRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ExtremeSmithingRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.InfinityCatalystCraftRecipe;
+import committee.nova.mods.avaritia.common.crafting.recipe.NoConsumeCatalystShapedRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ShapedTableCraftingRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ShapelessTableCraftingRecipe;
+import committee.nova.mods.avaritia.core.singularity.Singularity;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
@@ -13,13 +15,17 @@ import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.neoforged.neoforge.common.crafting.CompoundIngredient;
+import net.neoforged.neoforge.common.crafting.DataComponentIngredient;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -104,6 +110,69 @@ class AvaritiaRecipeImporterTest {
                 .isInstanceOfSatisfying(RecipeImportResult.Failure.class,
                         failure -> assertThat(failure.code())
                                 .isEqualTo("recipe.target.unsupported"));
+    }
+
+    @Test
+    void preservesNoConsumeRecipeIdentityAndRejectsCraftTweakerTarget() {
+        NoConsumeCatalystShapedRecipe recipe = mock(NoConsumeCatalystShapedRecipe.class);
+        when(recipe.getTier()).thenReturn(1);
+        when(recipe.getWidth()).thenReturn(2);
+        when(recipe.getHeight()).thenReturn(1);
+        when(recipe.getIngredients()).thenReturn(ingredients(stone(), dirt()));
+        when(recipe.getResultItem(any())).thenReturn(ItemStack.EMPTY);
+
+        CustomizationEntry imported = success("test:keep_catalyst", recipe);
+        RecipeImportResult craftTweaker = this.importer.importRecipe(
+                holder("test:keep_catalyst", recipe), OutputTarget.CRAFTTWEAKER, RegistryAccess.EMPTY);
+
+        assertThat(imported).isInstanceOfSatisfying(CustomizationEntry.NoConsumeCatalystShaped.class,
+                shaped -> {
+                    assertThat(shaped.tier()).isEqualTo(CraftingTier.SCULK);
+                    assertThat(shaped.ingredients()).hasSize(2);
+                });
+        assertThat(craftTweaker).isInstanceOfSatisfying(RecipeImportResult.Failure.class,
+                failure -> assertThat(failure.code()).isEqualTo("recipe.target.unsupported"));
+    }
+
+    @Test
+    void importsRuntimeSingularityDefinitions() {
+        Singularity singularity = new Singularity(id("avaritia:iron"), "singularity.avaritia.iron",
+                0xd8d8d8, 0x8f8f8f, 1450, 360, stone(), true, false);
+
+        RecipeImportResult result = this.importer.importSingularity(singularity, OutputTarget.DATAPACK);
+
+        assertThat(result).isInstanceOfSatisfying(RecipeImportResult.Success.class, success ->
+                assertThat(success.entry()).isInstanceOfSatisfying(
+                        CustomizationEntry.SingularityDefinition.class, definition -> {
+                            assertThat(definition.id()).isEqualTo(id("avaritia:iron"));
+                            assertThat(definition.target()).isEqualTo(OutputTarget.DATAPACK);
+                            assertThat(definition.count()).isEqualTo(1450);
+                            assertThat(definition.timeCost()).isEqualTo(360);
+                            assertThat(definition.recipeEnabled()).isFalse();
+                        }));
+    }
+
+    @Test
+    void preservesNeutronHorseArmorComponentAlternativeForKubeJs() {
+        CompoundTag data = new CompoundTag();
+        data.putString("potion", "minecraft:swiftness");
+        Ingredient potion = DataComponentIngredient.of(false, DataComponents.CUSTOM_DATA,
+                CustomData.of(data), Items.POTION);
+        ExtremeSmithingRecipe recipe = new ExtremeSmithingRecipe(stone(), dirt(),
+                CompoundIngredient.of(potion, stone(), dirt()), ItemStack.EMPTY);
+
+        CustomizationEntry.ExtremeSmithing imported = (CustomizationEntry.ExtremeSmithing)
+                success("avaritia:neutron_horse_armor", recipe);
+        RecipeImportResult craftTweaker = this.importer.importRecipe(
+                holder("avaritia:neutron_horse_armor", recipe),
+                OutputTarget.CRAFTTWEAKER, RegistryAccess.EMPTY);
+
+        assertThat(imported.addition()).isInstanceOfSatisfying(IngredientSpec.Choice.class,
+                choice -> assertThat(choice.alternatives())
+                        .anyMatch(IngredientSpec.Components.class::isInstance));
+        assertThat(craftTweaker).isInstanceOfSatisfying(RecipeImportResult.Failure.class,
+                failure -> assertThat(failure.code())
+                        .isEqualTo("ingredient.components.target_unsupported"));
     }
 
     private CustomizationEntry success(String recipeId, Recipe<?> recipe) {

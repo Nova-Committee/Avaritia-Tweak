@@ -25,7 +25,7 @@ class WorkspaceCodecTest {
         nbt.putInt("z", 2);
         nbt.putString("a", "value");
         CustomizationEntry recipe = new CustomizationEntry.ShapelessTable(id("test:recipe"),
-                OutputTarget.KUBEJS, CraftingTier.SCULK,
+                OutputTarget.KUBEJS, "核心材料替换", CraftingTier.SCULK,
                 List.of(new IngredientSpec.Item(id("minecraft:stone"), Optional.of(nbt))),
                 new ItemStackSpec(id("minecraft:diamond"), 1, Optional.of(nbt)));
         WorkspaceSnapshot snapshot = WorkspaceSnapshot.empty().withEntry(recipe);
@@ -37,7 +37,7 @@ class WorkspaceCodecTest {
         WorkspaceSnapshot decoded = ((WorkspaceDecodeResult.Success) result).snapshot();
         assertThat(decoded).isEqualTo(snapshot);
         assertThat(this.codec.encode(decoded)).isEqualTo(encoded);
-        assertThat(encoded).contains("strictNbt", "a:", "z:2");
+        assertThat(encoded).contains("strictNbt", "a:", "z:2", "核心材料替换");
     }
 
     @Test
@@ -55,6 +55,63 @@ class WorkspaceCodecTest {
         assertThat(result).isEqualTo(new WorkspaceDecodeResult.Success(snapshot));
         assertThat(encoded).contains("\"schemaVersion\": 1", "\"type\": \"choice\"",
                 "\"alternatives\"");
+    }
+
+    @Test
+    void roundTripsDataComponentPredicates() {
+        IngredientSpec.Components potion = new IngredientSpec.Components(id("minecraft:potion"),
+                "{\"minecraft:potion_contents\":{\"potion\":\"minecraft:swiftness\"}}", false);
+        CustomizationEntry recipe = new CustomizationEntry.ExtremeSmithing(id("test:horse_armor"),
+                OutputTarget.KUBEJS, new IngredientSpec.Item(id("minecraft:stone")),
+                new IngredientSpec.Item(id("minecraft:diamond_horse_armor")), potion,
+                new ItemStackSpec(id("minecraft:diamond"), 1));
+        WorkspaceSnapshot snapshot = WorkspaceSnapshot.empty().withEntry(recipe);
+
+        String encoded = this.codec.encode(snapshot);
+
+        assertThat(this.codec.decode(encoded)).isEqualTo(new WorkspaceDecodeResult.Success(snapshot));
+        assertThat(encoded).contains("\"type\": \"components\"", "minecraft:potion_contents",
+                "\"strict\": false");
+    }
+
+    @Test
+    void decodesLegacyEntriesWithoutANoteAsBlank() {
+        String content = """
+                {
+                  "schemaVersion": 1,
+                  "entries": [{
+                    "kind": "COMPRESSOR",
+                    "id": "test:legacy",
+                    "target": "KUBEJS",
+                    "ingredient": {"type":"item","id":"minecraft:stone"},
+                    "result": {"itemId":"minecraft:diamond","count":1},
+                    "inputCount": 1,
+                    "timeCost": 1
+                  }]
+                }
+                """;
+
+        WorkspaceDecodeResult.Success decoded = (WorkspaceDecodeResult.Success) this.codec.decode(content);
+
+        assertThat(decoded.snapshot().entries().values().iterator().next().note()).isEmpty();
+    }
+
+    @Test
+    void roundTripsCatalystPreservingShapedRecipeWithoutSchemaMigration() {
+        CustomizationEntry recipe = new CustomizationEntry.NoConsumeCatalystShaped(
+                id("test:keep_catalyst"), OutputTarget.KUBEJS, CraftingTier.END,
+                new TreeMap<>(java.util.Map.of(
+                        0, new IngredientSpec.Item(id("avaritia:infinity_catalyst")),
+                        48, new IngredientSpec.Item(id("minecraft:stone")))),
+                new ItemStackSpec(id("minecraft:diamond"), 2));
+        WorkspaceSnapshot snapshot = WorkspaceSnapshot.empty().withEntry(recipe);
+
+        String encoded = this.codec.encode(snapshot);
+        WorkspaceDecodeResult decoded = this.codec.decode(encoded);
+
+        assertThat(decoded).isEqualTo(new WorkspaceDecodeResult.Success(snapshot));
+        assertThat(encoded).contains("\"schemaVersion\": 1",
+                "\"kind\": \"NO_CONSUME_CATALYST_SHAPED\"", "\"slot\": 48");
     }
 
     @Test

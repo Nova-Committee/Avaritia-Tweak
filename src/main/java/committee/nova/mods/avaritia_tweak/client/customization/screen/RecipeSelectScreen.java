@@ -5,6 +5,8 @@ import committee.nova.mods.avaritia_tweak.client.customization.importers.RecipeI
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
+import committee.nova.mods.avaritia.core.singularity.SingularityReloadListener;
+import committee.nova.mods.avaritia.util.SingularityUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -13,7 +15,6 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.RecipeHolder;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -22,14 +23,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public final class RecipeSelectScreen extends ThemedEditorScreen {
     private final Screen previous;
     private final OutputTarget target;
     private final Consumer<RecipeImportResult> onImported;
     private final AvaritiaRecipeImporter importer = new AvaritiaRecipeImporter();
-    private final List<RecipeHolder<?>> allRecipes = new ArrayList<>();
-    private final List<RecipeHolder<?>> filteredRecipes = new ArrayList<>();
+    private final List<ImportCandidate> allRecipes = new ArrayList<>();
+    private final List<ImportCandidate> filteredRecipes = new ArrayList<>();
     private final List<RecipeRow> visibleRows = new ArrayList<>();
     private final List<EditorButton> resultWidgets = new ArrayList<>();
     private final DeferredSearchRefresh searchRefresh = new DeferredSearchRefresh();
@@ -37,7 +39,7 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
     private EditorButton previousPage;
     private EditorButton nextPage;
     private EditorButton importButton;
-    private RecipeHolder<?> selected;
+    private ImportCandidate selected;
     private Optional<RecipeImportResult> selectedInspection = Optional.empty();
     private Optional<ResourceLocation> inventoryOutput = Optional.empty();
     private int page;
@@ -48,7 +50,7 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
                               Consumer<RecipeImportResult> onImported) {
         super(Component.translatable("gui.avaritia_tweak.recipe_import.title"));
         this.previous = previous;
-        this.target = target == OutputTarget.DATAPACK ? OutputTarget.KUBEJS : target;
+        this.target = target;
         this.onImported = onImported;
     }
 
@@ -114,10 +116,24 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
         if (Minecraft.getInstance().level == null) {
             return;
         }
-        Minecraft.getInstance().level.getRecipeManager().getRecipes().stream()
-                .filter(this.importer::supports)
-                .sorted(Comparator.comparing(recipe -> recipe.id().toString()))
+        var level = Minecraft.getInstance().level;
+        var registryAccess = level.registryAccess();
+        if (this.target != OutputTarget.DATAPACK) {
+            level.getRecipeManager().getRecipes().stream()
+                    .filter(this.importer::supports)
+                    .map(recipe -> new ImportCandidate(recipe.id(),
+                            recipe.value().getResultItem(registryAccess),
+                            recipe.value().getClass().getSimpleName(),
+                            () -> this.importer.importRecipe(recipe, this.target, registryAccess)))
+                    .forEach(this.allRecipes::add);
+        }
+        SingularityReloadListener.INSTANCE.getAllSingularities().values().stream()
+                .map(singularity -> new ImportCandidate(singularity.getRegistryName(),
+                        SingularityUtils.getItemForSingularity(singularity),
+                        "SingularityDefinition",
+                        () -> this.importer.importSingularity(singularity, this.target)))
                 .forEach(this.allRecipes::add);
+        this.allRecipes.sort(Comparator.comparing(candidate -> candidate.id().toString()));
         updateFilteredRecipes();
     }
 
@@ -135,15 +151,15 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
                 .forEach(this.filteredRecipes::add);
     }
 
-    private boolean matchesFilters(RecipeHolder<?> recipe) {
-        ItemStack output = result(recipe);
+    private boolean matchesFilters(ImportCandidate recipe) {
+        ItemStack output = recipe.result();
         ResourceLocation outputId = output.isEmpty()
                 ? null
                 : BuiltInRegistries.ITEM.getKey(output.getItem());
         if (this.inventoryOutput.isPresent() && !this.inventoryOutput.get().equals(outputId)) {
             return false;
         }
-        return SearchText.matches(this.query, recipe.id().toString(),
+        return SearchText.matches(this.query, recipe.id().toString(), recipe.handler(),
                 outputId == null ? "" : outputId.toString(), output.getHoverName().getString());
     }
 
@@ -195,25 +211,14 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
         Minecraft.getInstance().setScreen(this.previous);
     }
 
-    private Optional<RecipeImportResult> inspect(RecipeHolder<?> recipe) {
-        if (Minecraft.getInstance().level == null) {
-            return Optional.empty();
-        }
-        return Optional.of(this.importer.importRecipe(recipe, this.target,
-                Minecraft.getInstance().level.registryAccess()));
+    private Optional<RecipeImportResult> inspect(ImportCandidate recipe) {
+        return Optional.of(recipe.inspect());
     }
 
-    private void selectRecipe(RecipeHolder<?> recipe) {
+    private void selectRecipe(ImportCandidate recipe) {
         this.selected = recipe;
         this.selectedInspection = inspect(recipe);
         requestResultRefresh();
-    }
-
-    private ItemStack result(RecipeHolder<?> recipe) {
-        if (Minecraft.getInstance().level == null) {
-            return ItemStack.EMPTY;
-        }
-        return recipe.value().getResultItem(Minecraft.getInstance().level.registryAccess());
     }
 
     private void refreshResults() {
@@ -226,7 +231,7 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
         this.page = Math.min(this.page, maxPage);
         int start = this.page * pageSize;
         for (int index = start; index < Math.min(this.filteredRecipes.size(), start + pageSize); index++) {
-            RecipeHolder<?> recipe = this.filteredRecipes.get(index);
+            ImportCandidate recipe = this.filteredRecipes.get(index);
             int y = layout.listTop + (index - start) * 22;
             String id = ScreenText.fit(this.font, recipe.id().toString(), layout.listWidth - 58);
             EditorButton row = EditorButton.builder(Component.literal(id), button -> selectRecipe(recipe))
@@ -304,7 +309,7 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
         for (RecipeRow row : this.visibleRows) {
             EditorTheme.renderSlot(graphics, row.x, row.y, 20, 20,
                     mouseX >= row.x && mouseX < row.x + 20 && mouseY >= row.y && mouseY < row.y + 20);
-            ItemStack stack = result(row.recipe);
+            ItemStack stack = row.recipe.result();
             graphics.renderItem(stack, row.x + 2, row.y + 2);
         }
     }
@@ -317,7 +322,7 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
                     layout.detailX, layout.top + 68, layout.detailWidth, EditorTheme.TEXT_MUTED);
             return Optional.empty();
         }
-        ItemStack result = result(this.selected);
+        ItemStack result = this.selected.result();
         int slotX = layout.detailX;
         int slotY = layout.top + 62;
         int slotSize = Math.min(38, Math.max(24, layout.detailWidth / 4));
@@ -358,7 +363,7 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
         if (!compact) {
             y = renderInspectorLine(graphics, layout.detailX, y, layout.detailWidth,
                     Component.translatable("gui.avaritia_tweak.recipe_import.handler"),
-                    this.selected.getClass().getSimpleName(), EditorTheme.SUCCESS);
+                    this.selected.handler(), EditorTheme.SUCCESS);
         }
         for (RecipeInspectorDetails.Attribute attribute : details.attributes()) {
             y = renderInspectorLine(graphics, layout.detailX, y, layout.detailWidth,
@@ -466,7 +471,22 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
         Minecraft.getInstance().setScreen(this.previous);
     }
 
-    private record RecipeRow(RecipeHolder<?> recipe, int x, int y) {
+    private record RecipeRow(ImportCandidate recipe, int x, int y) {
+    }
+
+    private record ImportCandidate(ResourceLocation id, ItemStack output, String handler,
+                                   Supplier<RecipeImportResult> inspection) {
+        private ImportCandidate {
+            output = output.copy();
+        }
+
+        ItemStack result() {
+            return this.output.copy();
+        }
+
+        RecipeImportResult inspect() {
+            return this.inspection.get();
+        }
     }
 
     private record Layout(int left, int top, int width, int height, int listWidth,

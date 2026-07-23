@@ -17,6 +17,7 @@ import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry
 import committee.nova.mods.avaritia_tweak.customization.model.EntryKey;
 import committee.nova.mods.avaritia_tweak.customization.model.EntryKind;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
+import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
 import committee.nova.mods.avaritia_tweak.customization.model.SingularityAction;
 import committee.nova.mods.avaritia_tweak.customization.render.PreviewResult;
@@ -28,6 +29,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.NotNull;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -46,7 +48,7 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     private static final int PANEL_HEADER_HEIGHT = 18;
     private static final int NAVIGATION_WIDTH = 180;
     private static final int OUTPUT_WIDTH = 224;
-    private static final int ENTRY_ROW_HEIGHT = 20;
+    private static final int ENTRY_ROW_HEIGHT = 30;
     private static final int ENTRY_PAGINATION_HEIGHT = 26;
     private static final int INGREDIENT_PAGE_SIZE = 18;
     private final EditorController controller;
@@ -59,6 +61,8 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     private final List<ChangeIndicator> navigationResultIndicators = new ArrayList<>();
     private final DeferredSearchRefresh navigationRefresh = new DeferredSearchRefresh();
     private final TableIngredientBrush tableBrush = new TableIngredientBrush();
+    private final TableSlotDragGesture tableSlotDrag = new TableSlotDragGesture();
+    private final EditorClipboard clipboard = new EditorClipboard();
     private EntryForm form;
     private Optional<EntryKey> editingKey = Optional.empty();
     private Panel activePanel;
@@ -84,6 +88,8 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     private EditorUiScale.ShapedGrid tableGridLayout;
     private EntryKind tableGridKind;
     private int lastBrushedSlot = -1;
+    private EditorContextMenu contextMenu;
+    private Map<String, String> fieldTextOnReopen = Map.of();
 
     public CustomizationEditorScreen(RecipeGeneratorMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
@@ -121,7 +127,13 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         this.tableGridLayout = null;
         this.tableGridKind = null;
         this.lastBrushedSlot = -1;
+        this.tableSlotDrag.cancel();
+        this.contextMenu = null;
         this.wideLayout = EditorUiScale.isWide(this.width, this.height, 680, 300);
+        if (!this.wideLayout && !this.fieldTextOnReopen.isEmpty()) {
+            this.activePanel = Panel.EDITOR;
+            this.controller.activePanel(this.activePanel.id);
+        }
         this.panelTop = HEADER_HEIGHT + 2;
         this.panelBottom = this.height - FOOTER_HEIGHT;
         EditorUiScale.EditorHeader header = EditorUiScale.editorHeader(this.width);
@@ -152,6 +164,7 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                 case OUTPUT -> addOutputPanel();
             }
         }
+        restoreFieldTextOnReopen();
     }
 
     private void addPanelTabs() {
@@ -193,30 +206,20 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         int x = this.navigationX + 8;
         int y = this.panelTop + PANEL_HEADER_HEIGHT + 8;
         int width = this.navigationWidth - 16;
-        this.addRenderableWidget(EditorButton.builder(kindLabel(this.form.kind()), button -> {
-            EntryKind next = cycle(EntryKind.values(), this.form.kind());
-            this.form = EntryForm.newEntry(next);
-            this.editingKey = Optional.empty();
-            this.ingredientPage = 0;
-            rebuild();
-        }).bounds(x, y, width, 20).style(EditorButton.Style.DEFAULT).build());
-        y += 24;
         int gap = 3;
         int actionWidth = (width - gap * 2) / 3;
-        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.avaritia_tweak.new_entry"), button -> {
-            this.form = EntryForm.newEntry(this.form.kind());
-            this.editingKey = Optional.empty();
-            setStatus("New local form", StatusTone.MUTED);
-            rebuild();
-        }).bounds(x, y, actionWidth, 20).style(EditorButton.Style.PRIMARY).build());
+        int actionY = y;
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.avaritia_tweak.new_entry"),
+                button -> openNewEntryTypeSelector())
+                .bounds(x, actionY, actionWidth, 20).style(EditorButton.Style.PRIMARY).build());
         EditorButton duplicate = this.addRenderableWidget(EditorButton.builder(
                 Component.translatable("gui.avaritia_tweak.duplicate_entry"), button -> duplicateSelected())
-                .bounds(x + actionWidth + gap, y, actionWidth, 20).style(EditorButton.Style.QUIET).build());
+                .bounds(x + actionWidth + gap, actionY, actionWidth, 20).style(EditorButton.Style.QUIET).build());
         duplicate.active = this.editingKey
                 .map(this.controller.draft().entries()::containsKey)
                 .orElse(false);
         this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.avaritia_tweak.import_recipe"),
-                button -> openRecipeImporter()).bounds(x + (actionWidth + gap) * 2, y,
+                button -> openRecipeImporter()).bounds(x + (actionWidth + gap) * 2, actionY,
                 width - (actionWidth + gap) * 2, 20).style(EditorButton.Style.QUIET).build());
         y += 24;
 
@@ -232,6 +235,24 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         this.navigationResultsY = y;
         this.navigationResultsWidth = width;
         refreshNavigationResults();
+    }
+
+    private void openNewEntryTypeSelector() {
+        this.fieldTextOnReopen = snapshotFieldText();
+        captureFields();
+        Minecraft.getInstance().setScreen(new EntryTypeSelectScreen(this, this::startNewEntry));
+    }
+
+    private void startNewEntry(EntryKind kind) {
+        this.fieldTextOnReopen = Map.of();
+        this.form = EntryForm.newEntry(kind);
+        this.editingKey = Optional.empty();
+        this.controller.select(Optional.empty());
+        this.ingredientPage = 0;
+        setStatus(Component.translatable("gui.avaritia_tweak.new_entry_ready", kindLabel(kind)).getString(),
+                StatusTone.MUTED);
+        this.activePanel = Panel.EDITOR;
+        this.controller.activePanel(this.activePanel.id);
     }
 
     private void refreshNavigationResults() {
@@ -253,14 +274,20 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         WorkspaceDiff workspaceDiff = this.differ.diff(this.controller.committed(), this.controller.draft());
         for (int index = start; index < Math.min(entries.size(), start + pageSize); index++) {
             CustomizationEntry entry = entries.get(index);
-            String label = ScreenText.fit(this.font, entry.id().toString(), width - 18);
+            boolean hasNote = !entry.note().isBlank();
+            Component primary = Component.literal(hasNote ? entry.note() : entry.id().toString());
+            Component secondary = Component.literal(hasNote ? entry.id().toString() : entry.kind().name());
             boolean selected = this.editingKey.filter(entry.key()::equals).isPresent();
             int rowY = y;
-            addNavigationResultWidget(EditorButton.builder(Component.literal(label), button -> selectEntry(entry))
-                    .bounds(x, rowY, width, 18).style(EditorButton.Style.LIST).selected(selected).build());
+            addNavigationResultWidget(EditorButton.builder(primary, button -> selectEntry(entry))
+                    .bounds(x, rowY, width, 26).style(EditorButton.Style.LIST).selected(selected)
+                    .secondary(secondary)
+                    .onSecondaryPress((button, mouseX, mouseY) ->
+                            openEntryContextMenu(entry, mouseX, mouseY))
+                    .build());
             workspaceDiff.entries().stream().filter(change -> change.key().equals(entry.key())).findFirst()
                     .ifPresent(change -> this.navigationResultIndicators.add(
-                            new ChangeIndicator(x + width - 11, rowY + 5, change.type())));
+                            new ChangeIndicator(x + width - 11, rowY + 9, change.type())));
             y += ENTRY_ROW_HEIGHT;
         }
         if (entries.isEmpty()) {
@@ -294,14 +321,16 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         int x = this.editorX + 10;
         int y = this.panelTop + PANEL_HEADER_HEIGHT + 8;
         int innerWidth = this.editorWidth - 20;
-        boolean denseTable = (this.form.kind() == EntryKind.SHAPED_TABLE
-                || this.form.kind() == EntryKind.SHAPELESS_TABLE)
+        boolean denseTable = this.form.kind().usesTableGrid()
                 && this.panelBottom - this.panelTop < 350;
         if (denseTable) {
             addDenseTableEditor(x, y, innerWidth);
         } else {
             addField("id", Component.translatable("gui.avaritia_tweak.entry_id"),
                     this.form.idText(), x, y, Math.min(260, innerWidth));
+            y += 30;
+            addField("note", Component.translatable("gui.avaritia_tweak.entry_note"),
+                    this.form.note(), x, y, Math.min(360, innerWidth));
             y += 30;
             int buttonWidth = Math.min(150, innerWidth / 2);
             addTargetButton(x, y, buttonWidth);
@@ -310,7 +339,7 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
             y += 28;
 
             switch (this.form.kind()) {
-                case SHAPED_TABLE -> addShapedEditor(x, y, innerWidth);
+                case SHAPED_TABLE, NO_CONSUME_CATALYST_SHAPED -> addShapedEditor(x, y, innerWidth);
                 case SHAPELESS_TABLE -> addShapelessEditor(x, y, innerWidth);
                 case COMPRESSOR -> addCompressorEditor(x, y, innerWidth);
                 case EXTREME_SMITHING -> addSmithingEditor(x, y, innerWidth);
@@ -332,13 +361,9 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                 rebuild();
             }
         }).bounds(x, actionsY, 92, 20).style(EditorButton.Style.PRIMARY).build());
-        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.avaritia_tweak.delete"), button -> {
-            this.editingKey.ifPresent(this.controller::remove);
-            this.form = EntryForm.newEntry(this.form.kind());
-            this.editingKey = Optional.empty();
-            setStatus("Entry removed from draft", StatusTone.WARNING);
-            rebuild();
-        }).bounds(x + 98, actionsY, 82, 20).style(EditorButton.Style.DANGER).build());
+        this.addRenderableWidget(EditorButton.builder(Component.translatable("gui.avaritia_tweak.delete"),
+                        button -> deleteEditingEntry())
+                .bounds(x + 98, actionsY, 82, 20).style(EditorButton.Style.DANGER).build());
     }
 
     private void addTargetButton(int x, int y, int width) {
@@ -354,49 +379,51 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     private void addDenseTableEditor(int x, int y, int width) {
         int tierWidth = Math.min(76, Math.max(62, width / 4));
         int targetWidth = Math.min(82, Math.max(68, width / 4));
-        int idWidth = Math.max(58, width - tierWidth - targetWidth - 12);
+        int fieldGap = 6;
+        int idWidth = Math.max(58, (width - fieldGap) / 2);
+        int noteWidth = Math.max(1, width - idWidth - fieldGap);
         addField("id", Component.translatable("gui.avaritia_tweak.entry_id"),
                 this.form.idText(), x, y, idWidth);
-        int targetX = x + idWidth + 6;
-        this.labels.add(new Label(targetX, y, kindLabel(this.form.kind()), EditorTheme.AVARITIA_GOLD));
-        addTargetButton(targetX, y + 10, targetWidth);
+        addField("note", Component.translatable("gui.avaritia_tweak.entry_note"),
+                this.form.note(), x + idWidth + fieldGap, y, noteWidth);
+        int targetX = x;
+        this.labels.add(new Label(targetX, y + 34, kindLabel(this.form.kind()), EditorTheme.AVARITIA_GOLD));
+        addTargetButton(targetX, y + 44, targetWidth);
         int tierX = targetX + targetWidth + 6;
-        this.labels.add(new Label(tierX, y,
+        this.labels.add(new Label(tierX, y + 34,
                 Component.literal(this.form.tier().gridSize() + "×" + this.form.tier().gridSize()),
                 EditorTheme.TEXT_MUTED));
-        addTierButton(tierX, y + 10, Math.max(1, x + width - tierX));
-        addTableBrushToolbar(x, y + 34, width);
-        if (this.form.kind() == EntryKind.SHAPED_TABLE) {
-            addShapedGrid(x, y + 58, width);
+        addTierButton(tierX, y + 44, Math.min(tierWidth, Math.max(1, x + width - tierX)));
+        addTableBrushToolbar(x, y + 68, width);
+        if (this.form.kind().usesShapedGrid()) {
+            addShapedGrid(x, y + 92, width);
         } else {
-            addShapelessGrid(x, y + 58, width);
+            addShapelessGrid(x, y + 92, width);
         }
     }
 
     private void addTableBrushToolbar(int x, int y, int width) {
-        int available = Math.max(3, width - 30);
-        int selectWidth = Math.max(1, available * 40 / 100);
-        int fillWidth = Math.max(1, available * 35 / 100);
-        int disableWidth = Math.max(1, available - selectWidth - fillWidth);
         this.addRenderableWidget(new GhostIngredientButton(x, y + 1,
                 this.tableBrush::selection, button -> openTableBrushSelector()));
-
-        int selectX = x + 22;
-        this.addRenderableWidget(EditorButton.builder(
-                        Component.translatable("gui.avaritia_tweak.brush.select"),
-                        button -> openTableBrushSelector())
-                .bounds(selectX, y, selectWidth, 20)
-                .style(EditorButton.Style.QUIET).selected(this.tableBrush.active()).build());
+        int labelWidth = Math.min(92, Math.max(48, width / 4));
+        String label = ScreenText.fit(this.font,
+                Component.translatable("gui.avaritia_tweak.brush.select").getString(), labelWidth - 2);
+        this.labels.add(new Label(x + 24, y + 6, Component.literal(label),
+                this.tableBrush.active() ? EditorTheme.AVARITIA_CYAN : EditorTheme.TEXT_MUTED));
+        int actionsX = x + 24 + labelWidth;
+        int available = Math.max(2, x + width - actionsX - 4);
+        int fillWidth = Math.max(1, (available - 4) * 3 / 5);
+        int disableWidth = Math.max(1, available - fillWidth - 4);
         EditorButton fill = this.addRenderableWidget(EditorButton.builder(
                         Component.translatable("gui.avaritia_tweak.brush.fill_empty"),
                         button -> fillTableWithBrush())
-                .bounds(selectX + selectWidth + 4, y, fillWidth, 20)
+                .bounds(actionsX, y, fillWidth, 20)
                 .style(EditorButton.Style.PRIMARY).build());
         fill.active = this.tableBrush.active();
         EditorButton disable = this.addRenderableWidget(EditorButton.builder(
                         Component.translatable("gui.avaritia_tweak.brush.disable"),
                         button -> disableTableBrush())
-                .bounds(selectX + selectWidth + fillWidth + 8, y, disableWidth, 20)
+                .bounds(actionsX + fillWidth + 4, y, disableWidth, 20)
                 .style(EditorButton.Style.QUIET).build());
         disable.active = this.tableBrush.active();
     }
@@ -440,7 +467,7 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         EditorUiScale.ShapedGrid layout = EditorUiScale.shapedGrid(
                 x, y, width, availableHeight, size);
         this.tableGridLayout = layout;
-        this.tableGridKind = EntryKind.SHAPED_TABLE;
+        this.tableGridKind = this.form.kind();
         for (int row = 0; row < size; row++) {
             for (int column = 0; column < size; column++) {
                 int slot = row * size + column;
@@ -448,7 +475,9 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                         layout.gridX() + column * layout.cellSize(),
                         layout.gridY() + row * layout.cellSize(), layout.cellSize(),
                         () -> Optional.ofNullable(this.form.grid().get(slot)),
-                        button -> handleShapedSlot(slot)));
+                        button -> handleShapedSlot(slot),
+                        (button, mouseX, mouseY) -> openTableIngredientContextMenu(
+                                slot, false, mouseX, mouseY)));
             }
         }
         addTableResult(layout);
@@ -490,7 +519,9 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                     () -> ingredientIndex < this.form.ingredients().size()
                             ? Optional.of(this.form.ingredients().get(ingredientIndex))
                             : Optional.empty(),
-                    button -> handleShapelessSlot(ingredientIndex));
+                    button -> handleShapelessSlot(ingredientIndex),
+                    (button, mouseX, mouseY) -> openTableIngredientContextMenu(
+                            ingredientIndex, true, mouseX, mouseY));
             slot.active = this.tableBrush.active()
                     || ingredientIndex <= this.form.ingredients().size();
             this.addRenderableWidget(slot);
@@ -528,18 +559,175 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         return this.tableBrush.apply(this.form, slot);
     }
 
+    private void openTableIngredientContextMenu(int slot, boolean shapeless,
+                                                double mouseX, double mouseY) {
+        Optional<IngredientSpec> current = tableIngredientAt(slot, shapeless);
+        List<EditorContextMenu.Item> items = new ArrayList<>();
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.edit_ingredient"),
+                () -> editTableIngredient(slot, shapeless)));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.copy_ingredient"),
+                () -> copyIngredient(current.orElseThrow()), current.isPresent()));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.paste_ingredient"),
+                () -> pasteTableIngredient(slot, shapeless), this.clipboard.ingredient().isPresent()));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.apply_brush"), () -> {
+                    boolean changed = applyTableBrush(slot);
+                    setStatus(Component.translatable(
+                            "gui.avaritia_tweak.context.brush_applied").getString(),
+                            changed ? StatusTone.SUCCESS : StatusTone.MUTED);
+                }, this.tableBrush.active()));
+        if (shapeless) {
+            items.add(EditorContextMenu.action(
+                    Component.translatable("gui.avaritia_tweak.context.replace_matching"),
+                    () -> replaceMatchingInputs(current), canReplaceMatching(current)));
+        } else {
+            items.add(EditorContextMenu.separatedAction(
+                    Component.translatable("gui.avaritia_tweak.context.grid_operations"),
+                    () -> openTableGridContextMenu(slot, current, mouseX, mouseY)));
+        }
+        current.ifPresent(ingredient -> {
+            items.add(EditorContextMenu.separatedAction(
+                    Component.translatable("gui.avaritia_tweak.context.set_brush"), () -> {
+                        this.tableBrush.select(Optional.of(ingredient));
+                        setStatus(Component.translatable("gui.avaritia_tweak.brush.selected",
+                                GhostIngredientButton.describe(ingredient)).getString(), StatusTone.SUCCESS);
+                        rebuildPreservingFieldText();
+                    }));
+            items.add(EditorContextMenu.danger(
+                    Component.translatable("gui.avaritia_tweak.context.clear_ingredient"), () -> {
+                        clearTableIngredient(slot, shapeless);
+                        setStatus(Component.translatable(
+                                "gui.avaritia_tweak.context.ingredient_cleared").getString(),
+                                StatusTone.WARNING);
+                    }));
+        });
+        openContextMenu(mouseX, mouseY, items);
+    }
+
+    private void openTableGridContextMenu(int slot, Optional<IngredientSpec> current,
+                                          double mouseX, double mouseY) {
+        List<EditorContextMenu.Item> items = new ArrayList<>();
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.fill_row"),
+                () -> reportGridChange(TableGridOperations.fillRow(
+                        this.form, slot, current.orElseThrow())), current.isPresent()));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.fill_column"),
+                () -> reportGridChange(TableGridOperations.fillColumn(
+                        this.form, slot, current.orElseThrow())), current.isPresent()));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.clear_row"),
+                () -> reportGridChange(TableGridOperations.clearRow(this.form, slot))));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.clear_column"),
+                () -> reportGridChange(TableGridOperations.clearColumn(this.form, slot))));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.replace_matching"),
+                () -> replaceMatchingInputs(current), canReplaceMatching(current)));
+        items.add(EditorContextMenu.separatedAction(
+                Component.translatable("gui.avaritia_tweak.context.mirror_horizontal"),
+                () -> reportGridChange(TableGridOperations.mirrorHorizontal(this.form))));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.mirror_vertical"),
+                () -> reportGridChange(TableGridOperations.mirrorVertical(this.form))));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.rotate_clockwise"),
+                () -> reportGridChange(TableGridOperations.rotateClockwise(this.form))));
+        items.add(EditorContextMenu.separatedAction(
+                Component.translatable("gui.avaritia_tweak.context.back"),
+                () -> openTableIngredientContextMenu(slot, false, mouseX, mouseY)));
+        openContextMenu(mouseX, mouseY, items);
+    }
+
+    private boolean canReplaceMatching(Optional<IngredientSpec> current) {
+        return current.isPresent() && this.clipboard.ingredient().isPresent()
+                && !current.orElseThrow().equals(this.clipboard.ingredient().orElseThrow());
+    }
+
+    private void replaceMatchingInputs(Optional<IngredientSpec> current) {
+        if (current.isEmpty() || this.clipboard.ingredient().isEmpty()) {
+            return;
+        }
+        reportGridChange(TableGridOperations.replaceAll(this.form, current.orElseThrow(),
+                this.clipboard.ingredient().orElseThrow()));
+    }
+
+    private void reportGridChange(int changed) {
+        Component message = changed > 0
+                ? Component.translatable("gui.avaritia_tweak.context.grid_changed", changed)
+                : Component.translatable("gui.avaritia_tweak.context.grid_unchanged");
+        setStatus(message.getString(),
+                changed > 0 ? StatusTone.SUCCESS : StatusTone.MUTED);
+    }
+
+    private void copyIngredient(IngredientSpec ingredient) {
+        this.clipboard.copyIngredient(ingredient);
+        setStatus(Component.translatable("gui.avaritia_tweak.context.ingredient_copied").getString(),
+                StatusTone.SUCCESS);
+    }
+
+    private void pasteTableIngredient(int slot, boolean shapeless) {
+        this.clipboard.ingredient().ifPresent(ingredient -> {
+            setTableIngredient(slot, shapeless, Optional.of(ingredient));
+            setStatus(Component.translatable("gui.avaritia_tweak.context.ingredient_pasted").getString(),
+                    StatusTone.SUCCESS);
+        });
+    }
+
+    private Optional<IngredientSpec> tableIngredientAt(int slot, boolean shapeless) {
+        if (!shapeless) {
+            return Optional.ofNullable(this.form.grid().get(slot));
+        }
+        return slot < this.form.ingredients().size()
+                ? Optional.of(this.form.ingredients().get(slot)) : Optional.empty();
+    }
+
+    private void editTableIngredient(int slot, boolean shapeless) {
+        if (shapeless) {
+            openShapelessIngredient(slot);
+            return;
+        }
+        openIngredient(Optional.ofNullable(this.form.grid().get(slot)),
+                value -> this.form.gridIngredient(slot, value));
+    }
+
+    private void clearTableIngredient(int slot, boolean shapeless) {
+        setTableIngredient(slot, shapeless, Optional.empty());
+    }
+
+    private void setTableIngredient(int slot, boolean shapeless, Optional<IngredientSpec> value) {
+        if (shapeless) {
+            if (slot < this.form.ingredients().size()) {
+                if (value.isPresent()) {
+                    this.form.ingredientAt(slot, value.orElseThrow());
+                } else {
+                    this.form.removeIngredient(slot);
+                }
+            } else {
+                value.ifPresent(this.form::addIngredient);
+            }
+            return;
+        }
+        this.form.gridIngredient(slot, value);
+    }
+
     private void addTableResult(EditorUiScale.ShapedGrid layout) {
         this.labels.add(new Label(layout.resultX(), layout.resultY() - 10,
                 Component.translatable("gui.avaritia_tweak.result"), EditorTheme.TEXT_MUTED));
         this.addRenderableWidget(new GhostItemStackButton(layout.resultX(), layout.resultY(),
-                this.form::result, button -> openResult()));
+                this.form::result, button -> openResult(),
+                (button, mouseX, mouseY) -> openResultContextMenu(mouseX, mouseY)));
     }
 
     private void addCompressorEditor(int x, int y, int width) {
         addIngredientSlot(x, y, Component.translatable("gui.avaritia_tweak.input"),
                 this.form.ingredient(), this.form::ingredient);
         this.addRenderableWidget(new GhostItemStackButton(x + 128, y,
-                this.form::result, button -> openResult()));
+                this.form::result, button -> openResult(),
+                (button, mouseX, mouseY) -> openResultContextMenu(mouseX, mouseY)));
         this.labels.add(new Label(x + 152, y + 6, Component.translatable("gui.avaritia_tweak.result"),
                 EditorTheme.TEXT_MUTED));
         addField("inputCount", Component.translatable("gui.avaritia_tweak.input_count"),
@@ -560,7 +748,8 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         this.labels.add(new Label(x + spacing * 3, y,
                 Component.translatable("gui.avaritia_tweak.result"), EditorTheme.TEXT_MUTED));
         this.addRenderableWidget(new GhostItemStackButton(x + spacing * 3, y + 11,
-                this.form::result, button -> openResult()));
+                this.form::result, button -> openResult(),
+                (button, mouseX, mouseY) -> openResultContextMenu(mouseX, mouseY)));
     }
 
     private void addCatalystEditor(int x, int y, int width) {
@@ -580,22 +769,28 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     private void addSingularityEditor(int x, int y, int width) {
         addField("displayName", Component.translatable("gui.avaritia_tweak.display_name"),
                 this.form.displayName(), x, y, Math.min(240, width));
-        addField("overlayColor", Component.translatable("gui.avaritia_tweak.overlay_color"),
-                String.format("%06x", this.form.overlayColor()), x, y + 32, 112);
-        addField("underlayColor", Component.translatable("gui.avaritia_tweak.underlay_color"),
-                String.format("%06x", this.form.underlayColor()), x + 132, y + 32, 112);
-        int numberWidth = Math.min(90, Math.max(60, (width - 54) / 2));
+        int colorGap = 8;
+        int colorWidth = Math.max(1, (width - colorGap) / 2);
+        this.addRenderableWidget(EditorButton.builder(colorLabel("overlay_color", this.form.overlayColor()),
+                        button -> openColorPicker(true))
+                .bounds(x, y + 34, colorWidth, 20).style(EditorButton.Style.QUIET)
+                .swatch(this.form.overlayColor()).build());
+        this.addRenderableWidget(EditorButton.builder(colorLabel("underlay_color", this.form.underlayColor()),
+                        button -> openColorPicker(false))
+                .bounds(x + colorWidth + colorGap, y + 34, Math.max(1, width - colorWidth - colorGap), 20)
+                .style(EditorButton.Style.QUIET).swatch(this.form.underlayColor()).build());
+        int ingredientSpace = 44;
+        int numberGap = 10;
+        int numberWidth = Math.max(44, Math.min(90,
+                (width - ingredientSpace - numberGap * 2) / 2));
+        addCompactIngredientSlot(x, y + 64, Component.translatable("gui.avaritia_tweak.input"),
+                this.form.ingredient(), this.form::ingredient);
+        int countX = x + ingredientSpace;
         addField("count", Component.translatable("gui.avaritia_tweak.count"),
-                Integer.toString(this.form.count()), x, y + 64, numberWidth);
+                Integer.toString(this.form.count()), countX, y + 64, numberWidth);
         addField("timeCost", Component.translatable("gui.avaritia_tweak.time_cost"),
-                Integer.toString(this.form.timeCost()), x + numberWidth + 12, y + 64, numberWidth);
-        int ingredientX = x + width - 18;
-        this.labels.add(new Label(Math.max(x, ingredientX - 40), y + 64,
-                Component.translatable("gui.avaritia_tweak.input"), EditorTheme.TEXT_MUTED));
-        this.addRenderableWidget(new GhostIngredientButton(ingredientX, y + 74,
-                () -> Optional.of(this.form.ingredient()),
-                button -> openIngredient(Optional.of(this.form.ingredient()),
-                        value -> value.ifPresent(this.form::ingredient))));
+                Integer.toString(this.form.timeCost()), countX + numberWidth + numberGap,
+                y + 64, numberWidth);
         this.addRenderableWidget(EditorButton.builder(toggleLabel("enabled", this.form.enabled()), button -> {
             captureFields();
             this.form.enabled(!this.form.enabled());
@@ -736,13 +931,22 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                         } else {
                             this.form.removeIngredient(ingredientIndex);
                         }
-                    })));
+                    }), (button, mouseX, mouseY) -> openIngredientContextMenu(
+                            Optional.of(this.form.ingredients().get(ingredientIndex)), value -> {
+                                if (value.isPresent()) {
+                                    this.form.ingredientAt(ingredientIndex, value.orElseThrow());
+                                } else {
+                                    this.form.removeIngredient(ingredientIndex);
+                                }
+                            }, true, mouseX, mouseY)));
         }
         if (values.size() < maximum && limit - start < INGREDIENT_PAGE_SIZE) {
             int local = limit - start;
             this.addRenderableWidget(new GhostIngredientButton(x + (local % 9) * 22,
                     y + (local / 9) * 24, Optional::empty,
-                    button -> openIngredient(Optional.empty(), value -> value.ifPresent(this.form::addIngredient))));
+                    button -> openIngredient(Optional.empty(), value -> value.ifPresent(this.form::addIngredient)),
+                    (button, mouseX, mouseY) -> openIngredientContextMenu(Optional.empty(),
+                            value -> value.ifPresent(this.form::addIngredient), false, mouseX, mouseY)));
         }
         this.labels.add(new Label(x, y + 53,
                 Component.literal(values.size() + "/" + maximum + " ingredients"), EditorTheme.TEXT_MUTED));
@@ -765,7 +969,9 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                                    Consumer<IngredientSpec> setter) {
         this.addRenderableWidget(new GhostIngredientButton(x, y, () -> Optional.of(current),
                 button -> openIngredient(Optional.of(current),
-                        value -> value.ifPresent(setter))));
+                        value -> value.ifPresent(setter)),
+                (button, mouseX, mouseY) -> openIngredientContextMenu(Optional.of(current),
+                        value -> value.ifPresent(setter), false, mouseX, mouseY)));
         this.labels.add(new Label(x + 24, y + 6, label, EditorTheme.TEXT_MUTED));
     }
 
@@ -773,7 +979,9 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                                           Consumer<IngredientSpec> setter) {
         this.labels.add(new Label(x, y, label, EditorTheme.TEXT_MUTED));
         this.addRenderableWidget(new GhostIngredientButton(x, y + 11, () -> Optional.of(current),
-                button -> openIngredient(Optional.of(current), value -> value.ifPresent(setter))));
+                button -> openIngredient(Optional.of(current), value -> value.ifPresent(setter)),
+                (button, mouseX, mouseY) -> openIngredientContextMenu(Optional.of(current),
+                        value -> value.ifPresent(setter), false, mouseX, mouseY)));
     }
 
     private void addField(String key, Component label, String value, int x, int y, int width) {
@@ -790,6 +998,9 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
             if (this.fields.containsKey("id")) {
                 this.form.idText(this.fields.get("id").getValue().strip());
             }
+            if (this.fields.containsKey("note")) {
+                this.form.note(this.fields.get("note").getValue());
+            }
             if (this.fields.containsKey("inputCount")) {
                 this.form.inputCount(parseInt("inputCount"));
             }
@@ -804,12 +1015,6 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
             }
             if (this.fields.containsKey("displayName")) {
                 this.form.displayName(this.fields.get("displayName").getValue());
-            }
-            if (this.fields.containsKey("overlayColor")) {
-                this.form.overlayColor(parseColor("overlayColor"));
-            }
-            if (this.fields.containsKey("underlayColor")) {
-                this.form.underlayColor(parseColor("underlayColor"));
             }
             if (this.fields.containsKey("singularityId")) {
                 this.form.singularityIdText(this.fields.get("singularityId").getValue().strip());
@@ -840,16 +1045,6 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         return Integer.parseInt(this.fields.get(key).getValue().strip());
     }
 
-    private int parseColor(String key) {
-        String value = this.fields.get(key).getValue().strip().toLowerCase(java.util.Locale.ROOT);
-        if (value.startsWith("#")) {
-            value = value.substring(1);
-        } else if (value.startsWith("0x")) {
-            value = value.substring(2);
-        }
-        return Integer.parseInt(value, 16);
-    }
-
     private void openIngredient(Optional<IngredientSpec> initial,
                                 Consumer<Optional<IngredientSpec>> setter) {
         captureFields();
@@ -864,6 +1059,24 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         Minecraft.getInstance().setScreen(new ItemStackEditorScreen(this, this.form.result(), result -> {
             this.form.result(result);
             setStatus("Ghost result updated locally", StatusTone.MUTED);
+        }));
+    }
+
+    private void openColorPicker(boolean overlay) {
+        if (!captureFields()) {
+            return;
+        }
+        int initial = overlay ? this.form.overlayColor() : this.form.underlayColor();
+        Component title = Component.translatable("gui.avaritia_tweak."
+                + (overlay ? "overlay_color" : "underlay_color"));
+        Minecraft.getInstance().setScreen(new ColorPickerScreen(this, title, initial, color -> {
+            if (overlay) {
+                this.form.overlayColor(color);
+            } else {
+                this.form.underlayColor(color);
+            }
+            setStatus(Component.translatable("gui.avaritia_tweak.color_picker.updated",
+                    String.format(java.util.Locale.ROOT, "#%06X", color)).getString(), StatusTone.SUCCESS);
         }));
     }
 
@@ -892,6 +1105,127 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         }));
     }
 
+    private void openIngredientContextMenu(Optional<IngredientSpec> current,
+                                           Consumer<Optional<IngredientSpec>> setter,
+                                           boolean clearable,
+                                           double mouseX, double mouseY) {
+        List<EditorContextMenu.Item> items = new ArrayList<>();
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.edit_ingredient"),
+                () -> openIngredient(current, setter)));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.copy_ingredient"),
+                () -> copyIngredient(current.orElseThrow()), current.isPresent()));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.paste_ingredient"), () -> {
+                    this.clipboard.ingredient().ifPresent(ingredient -> {
+                        setter.accept(Optional.of(ingredient));
+                        setStatus(Component.translatable(
+                                "gui.avaritia_tweak.context.ingredient_pasted").getString(),
+                                StatusTone.SUCCESS);
+                        rebuildPreservingFieldText();
+                    });
+                }, this.clipboard.ingredient().isPresent()));
+        if (clearable && current.isPresent()) {
+            items.add(EditorContextMenu.danger(
+                    Component.translatable("gui.avaritia_tweak.context.clear_ingredient"), () -> {
+                        setter.accept(Optional.empty());
+                        setStatus(Component.translatable(
+                                "gui.avaritia_tweak.context.ingredient_cleared").getString(),
+                                StatusTone.WARNING);
+                        rebuildPreservingFieldText();
+                    }));
+        }
+        openContextMenu(mouseX, mouseY, items);
+    }
+
+    private void openResultContextMenu(double mouseX, double mouseY) {
+        ItemStackSpec current = this.form.result();
+        openContextMenu(mouseX, mouseY, List.of(
+                EditorContextMenu.action(
+                        Component.translatable("gui.avaritia_tweak.context.edit_result"),
+                        this::openResult),
+                EditorContextMenu.action(
+                        Component.translatable("gui.avaritia_tweak.context.copy_result"), () -> {
+                            this.clipboard.copyItemStack(current);
+                            setStatus(Component.translatable(
+                                    "gui.avaritia_tweak.context.result_copied").getString(),
+                                    StatusTone.SUCCESS);
+                        }),
+                EditorContextMenu.action(
+                        Component.translatable("gui.avaritia_tweak.context.paste_result"), () -> {
+                            this.clipboard.itemStack().ifPresent(this.form::result);
+                            setStatus(Component.translatable(
+                                    "gui.avaritia_tweak.context.result_pasted").getString(),
+                                    StatusTone.SUCCESS);
+                        }, this.clipboard.itemStack().isPresent())));
+    }
+
+    private void openEntryContextMenu(CustomizationEntry entry, double mouseX, double mouseY) {
+        Optional<EntryChange> change = entryChange(entry.key());
+        List<EditorContextMenu.Item> items = new ArrayList<>();
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.context.open_entry"),
+                () -> selectEntry(entry)));
+        items.add(EditorContextMenu.action(
+                Component.translatable("gui.avaritia_tweak.duplicate_entry"),
+                () -> duplicateEntry(entry)));
+        items.add(EditorContextMenu.separatedAction(
+                Component.translatable("gui.avaritia_tweak.context.compare_committed"),
+                () -> openEntryComparison(change.orElseThrow()), change.isPresent()));
+        Component restoreLabel = change.map(EntryChange::type)
+                .filter(ChangeType.ADDED::equals).isPresent()
+                ? Component.translatable("gui.avaritia_tweak.context.discard_added_entry")
+                : Component.translatable("gui.avaritia_tweak.context.restore_committed");
+        items.add(EditorContextMenu.action(restoreLabel,
+                () -> restoreEntry(entry), change.isPresent()));
+        items.add(EditorContextMenu.danger(
+                Component.translatable("gui.avaritia_tweak.delete"),
+                () -> deleteEntry(entry)));
+        openContextMenu(mouseX, mouseY, items);
+    }
+
+    private Optional<EntryChange> entryChange(EntryKey key) {
+        return this.differ.diff(this.controller.committed(), this.controller.draft()).entries().stream()
+                .filter(change -> change.key().equals(key))
+                .findFirst();
+    }
+
+    private void openEntryComparison(EntryChange change) {
+        if (!captureFields()) {
+            return;
+        }
+        Minecraft.getInstance().setScreen(new EntryCompareScreen(this, change));
+    }
+
+    private void restoreEntry(CustomizationEntry entry) {
+        boolean editing = this.editingKey.filter(entry.key()::equals).isPresent();
+        Map<String, String> fieldText = editing ? Map.of() : snapshotFieldText();
+        if (!this.controller.restoreEntry(entry.key())) {
+            return;
+        }
+        if (editing) {
+            Optional<CustomizationEntry> restored = Optional.ofNullable(
+                    this.controller.draft().entries().get(entry.key()));
+            this.form = restored.map(EntryForm::from)
+                    .orElseGet(() -> EntryForm.newEntry(entry.kind()));
+            this.editingKey = restored.map(CustomizationEntry::key);
+            this.ingredientPage = 0;
+        }
+        setStatus(Component.translatable("gui.avaritia_tweak.context.entry_restored").getString(),
+                StatusTone.SUCCESS);
+        rebuild();
+        if (!editing) {
+            restoreFieldText(fieldText);
+        }
+    }
+
+    private void openContextMenu(double mouseX, double mouseY,
+                                 List<EditorContextMenu.Item> items) {
+        this.contextMenu = EditorContextMenu.open(this.font, this.width, this.height,
+                mouseX, mouseY, items);
+    }
+
     private void selectEntry(CustomizationEntry entry) {
         captureFields();
         this.form = EntryForm.from(entry);
@@ -911,7 +1245,11 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         if (source.isEmpty()) {
             return;
         }
-        this.form = EntryNavigation.duplicateForEditing(source.orElseThrow(),
+        duplicateEntry(source.orElseThrow());
+    }
+
+    private void duplicateEntry(CustomizationEntry source) {
+        this.form = EntryNavigation.duplicateForEditing(source,
                 this.controller.draft().entries().values());
         this.editingKey = Optional.empty();
         this.ingredientPage = 0;
@@ -922,6 +1260,32 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
             this.controller.activePanel(this.activePanel.id);
         }
         rebuild();
+    }
+
+    private void deleteEditingEntry() {
+        this.editingKey.map(this.controller.draft().entries()::get)
+                .ifPresentOrElse(this::deleteEntry, () -> {
+                    this.form = EntryForm.newEntry(this.form.kind());
+                    this.editingKey = Optional.empty();
+                    setStatus("Entry removed from draft", StatusTone.WARNING);
+                    rebuild();
+                });
+    }
+
+    private void deleteEntry(CustomizationEntry entry) {
+        boolean editing = this.editingKey.filter(entry.key()::equals).isPresent();
+        Map<String, String> fieldText = editing ? Map.of() : snapshotFieldText();
+        this.controller.remove(entry.key());
+        if (editing) {
+            this.form = EntryForm.newEntry(entry.kind());
+            this.editingKey = Optional.empty();
+            this.ingredientPage = 0;
+        }
+        setStatus("Entry removed from draft", StatusTone.WARNING);
+        rebuild();
+        if (!editing) {
+            restoreFieldText(fieldText);
+        }
     }
 
     private void filterEntries(String value) {
@@ -952,13 +1316,60 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
                 .ifPresent(field -> field.setValue(value)));
     }
 
+    private void restoreFieldTextOnReopen() {
+        if (this.fieldTextOnReopen.isEmpty()) {
+            return;
+        }
+        Map<String, String> values = this.fieldTextOnReopen;
+        this.fieldTextOnReopen = Map.of();
+        restoreFieldText(values);
+    }
+
     private void setStatus(String message, StatusTone tone) {
         this.status = Objects.requireNonNull(message, "message");
         this.statusTone = Objects.requireNonNull(tone, "tone");
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT || this.contextMenu != null) {
+            this.tableSlotDrag.cancel();
+        }
+        if (this.contextMenu != null) {
+            EditorContextMenu menu = this.contextMenu;
+            if (menu.mouseClicked(mouseX, mouseY, button)) {
+                if (!menu.isOpen() && this.contextMenu == menu) {
+                    this.contextMenu = null;
+                }
+                return true;
+            }
+            menu.close();
+            this.contextMenu = null;
+            if (button != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+                return true;
+            }
+        }
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && !this.tableBrush.active()) {
+            int slot = tableSlotAt(mouseX, mouseY);
+            boolean shapeless = this.form.kind() == EntryKind.SHAPELESS_TABLE;
+            boolean sourcePresent = slot >= 0 && tableIngredientAt(slot, shapeless).isPresent();
+            if (this.tableSlotDrag.begin(slot, sourcePresent, gestureMillis())) {
+                return true;
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (this.contextMenu != null) {
+            EditorContextMenu menu = this.contextMenu;
+            menu.keyPressed(keyCode);
+            if (!menu.isOpen() && this.contextMenu == menu) {
+                this.contextMenu = null;
+            }
+            return true;
+        }
         if (this.minecraft != null && FocusedEditBoxKeyGuard.consume(
                 this.getFocused(), this.minecraft.options.keyInventory,
                 keyCode, scanCode, modifiers)) {
@@ -968,8 +1379,33 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     }
 
     @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        return this.contextMenu != null || super.charTyped(codePoint, modifiers);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
+        if (this.contextMenu != null) {
+            if (!this.contextMenu.mouseScrolled(mouseX, mouseY, delta)) {
+                this.contextMenu.close();
+                this.contextMenu = null;
+            }
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, delta);
+    }
+
+    @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button,
                                 double dragX, double dragY) {
+        if (this.contextMenu != null) {
+            this.tableSlotDrag.cancel();
+            return true;
+        }
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && this.tableSlotDrag.armed()) {
+            this.tableSlotDrag.updateTarget(tableSlotAt(mouseX, mouseY));
+            return true;
+        }
         if (button == 0 && this.tableBrush.active()) {
             int slot = tableSlotAt(mouseX, mouseY);
             if (slot >= 0) {
@@ -985,7 +1421,45 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         this.lastBrushedSlot = -1;
+        if (this.contextMenu != null) {
+            this.tableSlotDrag.cancel();
+            return true;
+        }
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && this.tableSlotDrag.armed()) {
+            TableSlotDragGesture.Release release = this.tableSlotDrag.release(
+                    tableSlotAt(mouseX, mouseY), gestureMillis());
+            handleTableSlotRelease(release);
+            return true;
+        }
         return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private void handleTableSlotRelease(TableSlotDragGesture.Release release) {
+        switch (release.action()) {
+            case CLICK -> {
+                if (this.form.kind().usesShapedGrid()) {
+                    handleShapedSlot(release.sourceSlot());
+                } else if (this.form.kind() == EntryKind.SHAPELESS_TABLE) {
+                    handleShapelessSlot(release.sourceSlot());
+                }
+            }
+            case SWAP -> applyTableSlotSwap(release.sourceSlot(), release.targetSlot());
+            case NONE -> {
+            }
+        }
+    }
+
+    private void applyTableSlotSwap(int sourceSlot, int targetSlot) {
+        TableGridOperations.SwapResult result = TableGridOperations.swap(
+                this.form, sourceSlot, targetSlot);
+        String key = switch (result) {
+            case SWAPPED -> "gui.avaritia_tweak.drag_swap.swapped";
+            case MOVED -> "gui.avaritia_tweak.drag_swap.moved";
+            case UNCHANGED -> "gui.avaritia_tweak.drag_swap.unchanged";
+            case INVALID -> "gui.avaritia_tweak.drag_swap.invalid";
+        };
+        StatusTone tone = result.changed() ? StatusTone.SUCCESS : StatusTone.MUTED;
+        setStatus(Component.translatable(key, sourceSlot + 1, targetSlot + 1).getString(), tone);
     }
 
     private int tableSlotAt(double mouseX, double mouseY) {
@@ -993,6 +1467,10 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
             return -1;
         }
         return this.tableGridLayout.slotAt(mouseX, mouseY, this.form.tier().gridSize());
+    }
+
+    private static long gestureMillis() {
+        return System.nanoTime() / 1_000_000L;
     }
 
     @Override
@@ -1035,9 +1513,17 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         for (Label label : this.navigationResultLabels) {
             graphics.drawString(this.font, label.text, label.x, label.y, label.color, false);
         }
-        String leftStatus = this.status.isEmpty()
-                ? Component.translatable("gui.avaritia_tweak.ready").getString()
-                : this.status;
+        String leftStatus;
+        if (this.tableSlotDrag.armed()) {
+            String key = this.tableSlotDrag.active(gestureMillis())
+                    ? "gui.avaritia_tweak.drag_swap.drag_hint"
+                    : "gui.avaritia_tweak.drag_swap.hold_hint";
+            leftStatus = Component.translatable(key).getString();
+        } else {
+            leftStatus = this.status.isEmpty()
+                    ? Component.translatable("gui.avaritia_tweak.ready").getString()
+                    : this.status;
+        }
         String centerStatus = kindLabel(this.form.kind()).getString() + "  •  "
                 + targetLabel(this.form.target()).getString();
         String rightStatus = Component.translatable("gui.avaritia_tweak.workspace_status",
@@ -1083,7 +1569,50 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
             graphics.drawString(this.font, EditorTheme.changeMark(indicator.type),
                     indicator.x, indicator.y, EditorTheme.changeColor(indicator.type), false);
         }
+        renderTableSlotDragOverlay(graphics);
         this.renderTooltip(graphics, mouseX, mouseY);
+        if (this.contextMenu != null) {
+            this.contextMenu.render(graphics, mouseX, mouseY);
+        }
+    }
+
+    private void renderTableSlotDragOverlay(GuiGraphics graphics) {
+        if (!this.tableSlotDrag.armed() || this.tableGridLayout == null
+                || this.tableGridKind != this.form.kind()) {
+            return;
+        }
+        boolean active = this.tableSlotDrag.active(gestureMillis());
+        graphics.pose().pushPose();
+        graphics.pose().translate(0.0F, 0.0F, 300.0F);
+        renderTableSlotOutline(graphics, this.tableSlotDrag.sourceSlot(),
+                active ? EditorTheme.AVARITIA_CYAN : EditorTheme.AVARITIA_GOLD);
+        int targetSlot = this.tableSlotDrag.targetSlot();
+        if (active && targetSlot >= 0 && targetSlot != this.tableSlotDrag.sourceSlot()) {
+            TableGridOperations.SwapResult result = TableGridOperations.inspectSwap(
+                    this.form, this.tableSlotDrag.sourceSlot(), targetSlot);
+            int color = switch (result) {
+                case SWAPPED, MOVED -> EditorTheme.SUCCESS;
+                case UNCHANGED -> EditorTheme.WARNING;
+                case INVALID -> EditorTheme.ERROR;
+            };
+            renderTableSlotOutline(graphics, targetSlot, color);
+        }
+        graphics.pose().popPose();
+    }
+
+    private void renderTableSlotOutline(GuiGraphics graphics, int slot, int color) {
+        int size = this.form.tier().gridSize();
+        if (slot < 0 || slot >= size * size) {
+            return;
+        }
+        int cellSize = this.tableGridLayout.cellSize();
+        int x = this.tableGridLayout.gridX() + slot % size * cellSize;
+        int y = this.tableGridLayout.gridY() + slot / size * cellSize;
+        graphics.fill(x, y, x + cellSize, y + cellSize, EditorTheme.withAlpha(color, 0x36));
+        graphics.fill(x, y, x + cellSize, y + 1, color);
+        graphics.fill(x, y + cellSize - 1, x + cellSize, y + cellSize, color);
+        graphics.fill(x, y, x + 1, y + cellSize, color);
+        graphics.fill(x + cellSize - 1, y, x + cellSize, y + cellSize, color);
     }
 
     @Override
@@ -1123,6 +1652,12 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
 
     private static Component toggleLabel(String field, boolean value) {
         return Component.literal(field + ": " + (value ? "ON" : "OFF"));
+    }
+
+    private static Component colorLabel(String field, int color) {
+        return Component.translatable("gui.avaritia_tweak." + field)
+                .append(Component.literal("  " + String.format(java.util.Locale.ROOT,
+                        "#%06X", color & 0x00ffffff)));
     }
 
     private static List<OutputTarget> supportedTargets(EntryKind kind) {
