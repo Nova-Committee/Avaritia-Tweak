@@ -2,17 +2,15 @@ package committee.nova.mods.avaritia_tweak;
 
 import committee.nova.mods.avaritia_tweak.client.customization.screen.CustomizationEditorScreen;
 import committee.nova.mods.avaritia_tweak.init.ModReg;
-import net.minecraft.client.gui.screens.MenuScreens;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
-@Mod.EventBusSubscriber(modid = AvaritiaTweak.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = AvaritiaTweak.MOD_ID, value = Dist.CLIENT)
 public class AvaritiaTweakModClient {
     @SubscribeEvent
-    public static void clientSetUp(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> MenuScreens.register(
-                ModReg.recipe_generator_menu.get(), CustomizationEditorScreen::new));
+    public static void registerMenuScreens(RegisterMenuScreensEvent event) {
+        event.register(ModReg.recipe_generator_menu.get(), CustomizationEditorScreen::new);
     }
 }

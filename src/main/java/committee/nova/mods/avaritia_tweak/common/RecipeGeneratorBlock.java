@@ -3,7 +3,6 @@ package committee.nova.mods.avaritia_tweak.common;
 import committee.nova.mods.avaritia.api.common.block.BaseTileEntityBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -12,7 +11,6 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -30,14 +28,14 @@ public class RecipeGeneratorBlock extends BaseTileEntityBlock {
     }
 
     @Override
-    public @NotNull InteractionResult use(@NotNull BlockState state, Level level, @NotNull BlockPos pos, @NotNull Player player, @NotNull InteractionHand hand, @NotNull BlockHitResult trace) {
+    protected @NotNull InteractionResult useWithoutItem(@NotNull BlockState state, Level level,
+                                                        @NotNull BlockPos pos, @NotNull Player player,
+                                                        @NotNull BlockHitResult trace) {
         if (!level.isClientSide() && !player.isSpectator()) {
             var tile = level.getBlockEntity(pos);
 
-            if (tile instanceof RecipeGeneratorTile chestTile) {
-                NetworkHooks.openScreen((ServerPlayer) player, chestTile, buf -> {
-                    buf.writeBlockPos(pos);
-                });
+            if (player instanceof ServerPlayer serverPlayer && tile instanceof RecipeGeneratorTile generatorTile) {
+                serverPlayer.openMenu(generatorTile, pos);
             }
         }
 

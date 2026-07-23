@@ -166,7 +166,7 @@ public final class PreviewScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
         if (this.artifacts.isEmpty()) {
             return false;
         }

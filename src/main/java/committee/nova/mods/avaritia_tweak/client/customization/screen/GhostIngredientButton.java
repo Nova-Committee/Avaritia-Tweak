@@ -1,15 +1,15 @@
 package committee.nova.mods.avaritia_tweak.client.customization.screen;
 
+import committee.nova.mods.avaritia_tweak.customization.minecraft.MinecraftItemStacks;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
+import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Optional;
@@ -69,9 +69,8 @@ public final class GhostIngredientButton extends AbstractButton {
                 renderCompactMark(graphics, x, y, size, false, EditorTheme.TEXT_MUTED);
             }
         } else if (current.get() instanceof IngredientSpec.Item item) {
-            Item registered = ForgeRegistries.ITEMS.getValue(item.itemId());
-            ItemStack stack = registered == null ? ItemStack.EMPTY : new ItemStack(registered);
-            item.strictNbt().ifPresent(stack::setTag);
+            ItemStack stack = MinecraftItemStacks.fromSpec(
+                    new ItemStackSpec(item.itemId(), 1, item.strictNbt()));
             renderScaledItem(graphics, x, y, size, stack);
         } else {
             renderCompactMark(graphics, x, y, size, true, EditorTheme.AVARITIA_CYAN);

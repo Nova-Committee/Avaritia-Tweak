@@ -1,13 +1,12 @@
 package committee.nova.mods.avaritia_tweak.common;
 
 import committee.nova.mods.avaritia.api.common.tile.BaseTileEntity;
-import committee.nova.mods.avaritia.api.util.lang.Localizable;
 import committee.nova.mods.avaritia_tweak.init.ModReg;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -37,7 +36,7 @@ public class RecipeGeneratorTile extends BaseTileEntity {
 
     @Override
     public @NotNull Component getDisplayName() {
-        return Localizable.of("block.avaritia_tweak.recipe_generator_table").build();
+        return Component.translatable("block.avaritia_tweak.recipe_generator_table");
     }
 
     @Override
@@ -55,34 +54,44 @@ public class RecipeGeneratorTile extends BaseTileEntity {
     }
 
     @Override
-    public void load(@NotNull CompoundTag tag) {
-        super.load(tag);
+    protected void loadAdditional(@NotNull CompoundTag tag, HolderLookup.@NotNull Provider registries) {
+        super.loadAdditional(tag, registries);
         this.shaped = tag.getBoolean("shaped");
         this.tier = tag.getInt("tier");
         this.outType = tag.getInt("outType");
         this.selectMode = tag.getBoolean("selectMode");
-        this.brushItem = ItemStack.of(tag.getCompound("brushItem"));
+        this.brushItem = ItemStack.parseOptional(registries, tag.getCompound("brushItem"));
         this.selectedSlot = tag.getInt("selectedSlot");
         this.containers.clearContent();
         ListTag listtag = tag.getList("Items", 10);
         for (int i = 0; i < listtag.size(); ++i) {
             CompoundTag compoundtag = listtag.getCompound(i);
             int j = compoundtag.getByte("Slot") & 255;
-            if (j < this.containers.items.size()) {
-                this.containers.items.set(j, ItemStack.of(compoundtag));
+            if (j < this.containers.getContainerSize()) {
+                this.containers.setItem(j, ItemStack.parseOptional(registries, compoundtag));
             }
         }
     }
 
     @Override
-    protected void saveAdditional(@NotNull CompoundTag tag) {
-        super.saveAdditional(tag);
+    protected void saveAdditional(@NotNull CompoundTag tag, HolderLookup.@NotNull Provider registries) {
+        super.saveAdditional(tag, registries);
         tag.putBoolean("shaped", shaped);
         tag.putInt("tier", tier);
         tag.putInt("outType", outType);
         tag.putBoolean("selectMode", selectMode);
-        tag.put("brushItem", brushItem.save(new CompoundTag()));
+        tag.put("brushItem", brushItem.saveOptional(registries));
         tag.putInt("selectedSlot", selectedSlot);
-        ContainerHelper.saveAllItems(tag, this.containers.items);
+        ListTag items = new ListTag();
+        for (int slot = 0; slot < this.containers.getContainerSize(); slot++) {
+            ItemStack stack = this.containers.getItem(slot);
+            if (!stack.isEmpty()) {
+                if (stack.saveOptional(registries) instanceof CompoundTag item) {
+                    item.putByte("Slot", (byte) slot);
+                    items.add(item);
+                }
+            }
+        }
+        tag.put("Items", items);
     }
 }

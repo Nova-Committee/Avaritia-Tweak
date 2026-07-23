@@ -1,5 +1,6 @@
 package committee.nova.mods.avaritia_tweak.client.customization.screen;
 
+import committee.nova.mods.avaritia_tweak.customization.minecraft.MinecraftItemStacks;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -9,9 +10,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Optional;
@@ -159,17 +158,16 @@ public final class ItemStackEditorScreen extends Screen {
         if (id == null) {
             return ItemStack.EMPTY;
         }
-        Item item = ForgeRegistries.ITEMS.getValue(id);
-        if (item == null) {
+        int count;
+        try {
+            count = Math.max(1, Integer.parseInt(this.countText.strip()));
+        } catch (NumberFormatException ignored) {
+            count = 1;
+        }
+        if (MinecraftItemStacks.findItem(id).isEmpty()) {
             return ItemStack.EMPTY;
         }
-        ItemStack stack = new ItemStack(item);
-        try {
-            stack.setCount(Math.max(1, Integer.parseInt(this.countText.strip())));
-        } catch (NumberFormatException ignored) {
-            stack.setCount(1);
-        }
-        return stack;
+        return MinecraftItemStacks.fromSpec(new ItemStackSpec(id, count));
     }
 
     private Layout layout() {

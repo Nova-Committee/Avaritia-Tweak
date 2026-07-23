@@ -1,13 +1,13 @@
 package committee.nova.mods.avaritia_tweak.client.customization.screen;
 
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -36,7 +36,7 @@ final class RegistryItemSelectScreen extends Screen {
         super(Component.translatable("gui.avaritia_tweak.item_browser.title"));
         this.previous = previous;
         this.onSelected = onSelected;
-        this.allItems = ForgeRegistries.ITEMS.getKeys().stream()
+        this.allItems = BuiltInRegistries.ITEM.keySet().stream()
                 .sorted(Comparator.comparing(ResourceLocation::toString))
                 .toList();
         this.filteredItems.addAll(this.allItems);
@@ -116,7 +116,7 @@ final class RegistryItemSelectScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
         Layout layout = layout();
         int pageSize = pageSize(layout);
         int next = Math.max(0, Math.min(maxPage(pageSize),

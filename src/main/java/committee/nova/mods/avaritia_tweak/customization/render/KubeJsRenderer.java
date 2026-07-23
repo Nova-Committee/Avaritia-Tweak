@@ -112,8 +112,8 @@ public final class KubeJsRenderer implements ArtifactRenderer {
             renderShaped(script, shaped);
         } else if (entry instanceof CustomizationEntry.ShapelessTable shapeless) {
             script.append("    avaritia.shapeless_table(\n")
-                    .append("        ").append(shapeless.tier().value()).append(",\n")
-                    .append("        ").append(itemStack(shapeless.result())).append(",\n");
+                    .append("        ").append(itemStack(shapeless.result())).append(",\n")
+                    .append("        ").append(shapeless.tier().value()).append(",\n");
             appendIngredientArray(script, shapeless.ingredients(), 8);
             script.append("\n    ).id(").append(ScriptEscaper.quote(shapeless.id().toString())).append(");\n");
         } else if (entry instanceof CustomizationEntry.Compressor compressor) {
@@ -225,18 +225,18 @@ public final class KubeJsRenderer implements ArtifactRenderer {
         }
         IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
         return item.strictNbt()
-                .map(nbt -> "Item.of(" + ScriptEscaper.quote(item.itemId().toString()) + ", "
-                        + ScriptEscaper.quote(NbtText.canonical(nbt)) + ").strongNBT()")
+                .map(nbt -> "Ingredient.withData(" + ScriptEscaper.quote(item.itemId().toString())
+                        + ", {\"minecraft:custom_data\": "
+                        + ScriptEscaper.quote(NbtText.canonical(nbt)) + "}, true)")
                 .orElseGet(() -> ScriptEscaper.quote(item.itemId().toString()));
     }
 
     static String itemStack(ItemStackSpec stack) {
         String itemId = ScriptEscaper.quote(stack.itemId().toString());
         if (stack.nbt().isPresent()) {
-            String nbt = ScriptEscaper.quote(NbtText.canonical(stack.nbt().orElseThrow()));
-            return stack.count() == 1
-                    ? "Item.of(" + itemId + ", " + nbt + ")"
-                    : "Item.of(" + itemId + ", " + stack.count() + ", " + nbt + ")";
+            String prefix = stack.count() == 1 ? "" : stack.count() + "x ";
+            return ScriptEscaper.quote(prefix + stack.itemId()
+                    + NbtText.canonical(stack.nbt().orElseThrow()));
         }
         return stack.count() == 1
                 ? itemId

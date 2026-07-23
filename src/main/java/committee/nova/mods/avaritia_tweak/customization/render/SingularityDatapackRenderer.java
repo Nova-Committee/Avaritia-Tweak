@@ -2,6 +2,7 @@ package committee.nova.mods.avaritia_tweak.customization.render;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
@@ -10,12 +11,12 @@ import committee.nova.mods.avaritia_tweak.customization.model.WorkspaceSnapshot;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 public final class SingularityDatapackRenderer implements ArtifactRenderer {
     public static final String ROOT = "avaritia_tweak_exports/avaritia_tweak_singularities/";
     public static final ArtifactPath PACK_METADATA = ArtifactPath.of(ROOT + "pack.mcmeta");
+    static final int PACK_FORMAT = 48;
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
             .disableHtmlEscaping()
@@ -41,7 +42,7 @@ public final class SingularityDatapackRenderer implements ArtifactRenderer {
 
     private static JsonObject packMetadata() {
         JsonObject pack = new JsonObject();
-        pack.addProperty("pack_format", 15);
+        pack.addProperty("pack_format", PACK_FORMAT);
         pack.addProperty("description", "Avaritia-Tweak generated singularities");
         JsonObject root = new JsonObject();
         root.add("pack", pack);
@@ -57,8 +58,8 @@ public final class SingularityDatapackRenderer implements ArtifactRenderer {
         JsonObject json = new JsonObject();
         json.addProperty("name", definition.id().toString());
         json.addProperty("displayName", definition.displayName());
-        json.addProperty("overlayColor", rgb(definition.overlayColor()));
-        json.addProperty("underlayColor", rgb(definition.underlayColor()));
+        json.addProperty("overlayColor", definition.overlayColor());
+        json.addProperty("underlayColor", definition.underlayColor());
         json.addProperty("count", definition.count());
         json.addProperty("timeCost", definition.timeCost());
         json.add("ingredient", ingredient(definition.ingredient()));
@@ -75,14 +76,19 @@ public final class SingularityDatapackRenderer implements ArtifactRenderer {
         }
         IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
         item.strictNbt().ifPresent(nbt -> {
-            json.addProperty("type", "forge:nbt");
-            json.addProperty("nbt", NbtText.canonical(nbt));
+            JsonObject components = new JsonObject();
+            JsonArray items = new JsonArray();
+            items.add(item.itemId().toString());
+            components.addProperty("minecraft:custom_data", NbtText.canonical(nbt));
+            json.addProperty("type", "neoforge:components");
+            json.add("items", items);
+            json.add("components", components);
+            json.addProperty("strict", true);
         });
-        json.addProperty("item", item.itemId().toString());
+        if (item.strictNbt().isEmpty()) {
+            json.addProperty("item", item.itemId().toString());
+        }
         return json;
     }
 
-    private static String rgb(int color) {
-        return String.format(Locale.ROOT, "%06x", color);
-    }
 }

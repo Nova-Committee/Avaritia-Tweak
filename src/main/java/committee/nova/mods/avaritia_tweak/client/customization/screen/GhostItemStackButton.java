@@ -1,15 +1,14 @@
 package committee.nova.mods.avaritia_tweak.client.customization.screen;
 
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
+import committee.nova.mods.avaritia_tweak.customization.minecraft.MinecraftItemStacks;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.function.Consumer;
@@ -36,11 +35,7 @@ public final class GhostItemStackButton extends AbstractButton {
         EditorTheme.renderSlot(graphics, this.getX(), this.getY(), this.width, this.height,
                 this.isHoveredOrFocused());
         ItemStackSpec current = this.value.get();
-        Item registered = ForgeRegistries.ITEMS.getValue(current.itemId());
-        ItemStack stack = registered == null
-                ? ItemStack.EMPTY
-                : new ItemStack(registered, current.count());
-        current.nbt().ifPresent(stack::setTag);
+        ItemStack stack = MinecraftItemStacks.fromSpec(current);
         graphics.renderItem(stack, this.getX() + 1, this.getY() + 1);
         graphics.renderItemDecorations(Minecraft.getInstance().font, stack, this.getX() + 1, this.getY() + 1);
         if (this.isHovered()) {

@@ -4,7 +4,7 @@ import committee.nova.mods.avaritia_tweak.customization.diff.ChangeType;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
-import net.minecraftforge.fml.loading.FMLPaths;
+import net.neoforged.fml.loading.FMLPaths;
 
 import java.util.List;
 import java.util.Locale;

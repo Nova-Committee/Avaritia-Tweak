@@ -2,7 +2,7 @@ package committee.nova.mods.avaritia_tweak.common;
 
 import committee.nova.mods.avaritia_tweak.init.ModReg;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -23,7 +23,8 @@ public final class RecipeGeneratorMenu extends AbstractContainerMenu {
         this.blockPos = blockPos.immutable();
     }
 
-    public static RecipeGeneratorMenu fromNetwork(int containerId, Inventory inventory, FriendlyByteBuf buffer) {
+    public static RecipeGeneratorMenu fromNetwork(int containerId, Inventory inventory,
+                                                  RegistryFriendlyByteBuf buffer) {
         return new RecipeGeneratorMenu(containerId, inventory, buffer.readBlockPos());
     }
 

@@ -1,5 +1,7 @@
 package committee.nova.mods.avaritia_tweak.customization.render;
 
+import com.mojang.serialization.JsonOps;
+import committee.nova.mods.avaritia.core.singularity.Singularity;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.EntryKey;
@@ -8,8 +10,16 @@ import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
 import committee.nova.mods.avaritia_tweak.customization.model.SingularityAction;
 import committee.nova.mods.avaritia_tweak.customization.model.WorkspaceSnapshot;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.crafting.Ingredient;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -34,6 +44,7 @@ class RendererTest {
                         "avaritia.infinity_catalyst(", "avaritia.eternal_singularity(")
                 .contains(".inputCount(1000)", ".timeCost(240)")
                 .contains(".id(\"test:shaped\")", ".id(\"test:eternal\")")
+                .contains("avaritia.shapeless_table(\n        Item.of(\"minecraft:diamond\", 2),\n        2,")
                 .contains("\"! #\"")
                 .doesNotContain("\r")
                 .endsWith("\n");
@@ -70,9 +81,38 @@ class RendererTest {
         String js = new KubeJsRenderer().render(kube).get(0).text();
         String zs = new CraftTweakerRenderer().render(craftTweaker).get(0).text();
 
-        assertThat(js).contains("Item.of(\"minecraft:stone\"", ").strongNBT()");
-        assertThat(zs).contains(".onlyIf(\"avaritia_tweak_strict_", "stack.matches(", ", true)");
+        assertThat(js).contains("Ingredient.withData(\"minecraft:stone\"",
+                        "{\"minecraft:custom_data\": ", "}, true)")
+                .doesNotContain(".strongNBT()");
+        assertThat(zs).contains(".withJsonComponent(<componenttype:minecraft:custom_data>, ")
+                .doesNotContain(".withTag(", "stack.matches(");
+        assertThat(KubeJsRenderer.itemStack(new ItemStackSpec(id("minecraft:diamond"), 2,
+                Optional.of(nbt)))).startsWith("\"2x minecraft:diamond{");
         assertThat(NbtText.canonical(nbt)).startsWith("{a:").endsWith(",z:2}");
+    }
+
+    @Test
+    void rendersNeoForgeComponentIngredientAndCurrentDataPackFormat() {
+        CompoundTag nbt = new CompoundTag();
+        nbt.putInt("value", 7);
+        IngredientSpec.Item strict = new IngredientSpec.Item(id("minecraft:stone"), Optional.of(nbt));
+
+        com.google.gson.JsonObject json = SingularityDatapackRenderer.ingredient(strict);
+        Ingredient decoded = Ingredient.CODEC
+                .parse(RegistryOps.create(JsonOps.INSTANCE,
+                        RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)), json)
+                .getOrThrow();
+        ItemStack exact = new ItemStack(Items.STONE);
+        exact.set(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
+        CompoundTag changedNbt = nbt.copy();
+        changedNbt.putInt("extra", 1);
+        ItemStack changed = new ItemStack(Items.STONE);
+        changed.set(DataComponents.CUSTOM_DATA, CustomData.of(changedNbt));
+
+        assertThat(json.get("type").getAsString()).isEqualTo("neoforge:components");
+        assertThat(decoded.test(exact)).isTrue();
+        assertThat(decoded.test(changed)).isFalse();
+        assertThat(SingularityDatapackRenderer.PACK_FORMAT).isEqualTo(48);
     }
 
     @Test
@@ -93,12 +133,19 @@ class RendererTest {
         ArtifactPath dataPath = ArtifactPath.of(SingularityDatapackRenderer.ROOT
                 + "data/test/singularities/data/path.json");
         String json = plan.artifacts().get(dataPath).text();
+        RegistryOps<com.google.gson.JsonElement> registryOps = RegistryOps.create(JsonOps.INSTANCE,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 
         assertThat(js.indexOf("event.removeAll()")).isLessThan(js.indexOf("event.removeRecipe(\"test:old\")"));
         assertThat(js).contains("event.register(\"test:kube\"", ".setRecipeEnabled(true)");
         assertThat(json)
-                .contains("\"name\": \"test:data/path\"", "\"timeCost\"", "\"recipeEnabled\"")
+                .contains("\"name\": \"test:data/path\"", "\"timeCost\"", "\"recipeEnabled\"",
+                        "\"overlayColor\": 4386", "\"underlayColor\": 11189196")
                 .doesNotContain("timeRequired", "recipeDisabled");
+        assertThat(Singularity.CODEC.parse(registryOps,
+                com.google.gson.JsonParser.parseString(json)).result()).isPresent();
+        assertThat(plan.artifacts().get(SingularityDatapackRenderer.PACK_METADATA).text())
+                .contains("\"pack_format\": 48");
         assertThat(plan.artifacts()).containsKeys(KubeJsRenderer.PATH, CraftTweakerRenderer.PATH,
                 SingularityDatapackRenderer.PACK_METADATA, dataPath);
     }

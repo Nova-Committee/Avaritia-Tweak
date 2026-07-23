@@ -116,7 +116,7 @@ public final class HistoryScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
         Layout layout = layout();
         if (mouseX > layout.left + layout.timelineWidth) {
             return false;

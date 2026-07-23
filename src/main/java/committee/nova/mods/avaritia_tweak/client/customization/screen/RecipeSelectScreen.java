@@ -11,7 +11,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -26,8 +26,8 @@ public final class RecipeSelectScreen extends Screen {
     private final OutputTarget target;
     private final Consumer<RecipeImportResult> onImported;
     private final AvaritiaRecipeImporter importer = new AvaritiaRecipeImporter();
-    private final List<Recipe<?>> allRecipes = new ArrayList<>();
-    private final List<Recipe<?>> filteredRecipes = new ArrayList<>();
+    private final List<RecipeHolder<?>> allRecipes = new ArrayList<>();
+    private final List<RecipeHolder<?>> filteredRecipes = new ArrayList<>();
     private final List<RecipeRow> visibleRows = new ArrayList<>();
     private final List<EditorButton> resultWidgets = new ArrayList<>();
     private final DeferredSearchRefresh searchRefresh = new DeferredSearchRefresh();
@@ -35,7 +35,7 @@ public final class RecipeSelectScreen extends Screen {
     private EditorButton previousPage;
     private EditorButton nextPage;
     private EditorButton importButton;
-    private Recipe<?> selected;
+    private RecipeHolder<?> selected;
     private Optional<RecipeImportResult> selectedInspection = Optional.empty();
     private int page;
     private String query = "";
@@ -100,7 +100,7 @@ public final class RecipeSelectScreen extends Screen {
         }
         Minecraft.getInstance().level.getRecipeManager().getRecipes().stream()
                 .filter(this.importer::supports)
-                .sorted(Comparator.comparing(recipe -> recipe.getId().toString()))
+                .sorted(Comparator.comparing(recipe -> recipe.id().toString()))
                 .forEach(this.allRecipes::add);
         this.filteredRecipes.addAll(this.allRecipes);
     }
@@ -111,7 +111,7 @@ public final class RecipeSelectScreen extends Screen {
         this.filteredRecipes.clear();
         this.allRecipes.stream()
                 .filter(recipe -> normalized.isEmpty()
-                        || recipe.getId().toString().toLowerCase(Locale.ROOT).contains(normalized)
+                        || recipe.id().toString().toLowerCase(Locale.ROOT).contains(normalized)
                         || result(recipe).getHoverName().getString()
                         .toLowerCase(Locale.ROOT).contains(normalized))
                 .forEach(this.filteredRecipes::add);
@@ -135,7 +135,7 @@ public final class RecipeSelectScreen extends Screen {
         Minecraft.getInstance().setScreen(this.previous);
     }
 
-    private Optional<RecipeImportResult> inspect(Recipe<?> recipe) {
+    private Optional<RecipeImportResult> inspect(RecipeHolder<?> recipe) {
         if (Minecraft.getInstance().level == null) {
             return Optional.empty();
         }
@@ -143,17 +143,17 @@ public final class RecipeSelectScreen extends Screen {
                 Minecraft.getInstance().level.registryAccess()));
     }
 
-    private void selectRecipe(Recipe<?> recipe) {
+    private void selectRecipe(RecipeHolder<?> recipe) {
         this.selected = recipe;
         this.selectedInspection = inspect(recipe);
         requestResultRefresh();
     }
 
-    private ItemStack result(Recipe<?> recipe) {
+    private ItemStack result(RecipeHolder<?> recipe) {
         if (Minecraft.getInstance().level == null) {
             return ItemStack.EMPTY;
         }
-        return recipe.getResultItem(Minecraft.getInstance().level.registryAccess());
+        return recipe.value().getResultItem(Minecraft.getInstance().level.registryAccess());
     }
 
     private void refreshResults() {
@@ -166,9 +166,9 @@ public final class RecipeSelectScreen extends Screen {
         this.page = Math.min(this.page, maxPage);
         int start = this.page * pageSize;
         for (int index = start; index < Math.min(this.filteredRecipes.size(), start + pageSize); index++) {
-            Recipe<?> recipe = this.filteredRecipes.get(index);
+            RecipeHolder<?> recipe = this.filteredRecipes.get(index);
             int y = layout.listTop + (index - start) * 22;
-            String id = ScreenText.fit(this.font, recipe.getId().toString(), layout.listWidth - 58);
+            String id = ScreenText.fit(this.font, recipe.id().toString(), layout.listWidth - 58);
             EditorButton row = EditorButton.builder(Component.literal(id), button -> selectRecipe(recipe))
                     .bounds(layout.left + 34, y, layout.listWidth - 42, 20)
                     .style(EditorButton.Style.LIST).selected(recipe == this.selected).build();
@@ -185,7 +185,7 @@ public final class RecipeSelectScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
         Layout layout = layout();
         if (mouseX > layout.left + layout.listWidth) {
             return false;
@@ -271,7 +271,7 @@ public final class RecipeSelectScreen extends Screen {
         int y = slotY + slotSize + 6;
         y = renderInspectorLine(graphics, layout.detailX, y, layout.detailWidth,
                 Component.translatable("gui.avaritia_tweak.recipe_import.id_short"),
-                this.selected.getId().toString(), EditorTheme.AVARITIA_CYAN);
+                this.selected.id().toString(), EditorTheme.AVARITIA_CYAN);
 
         RecipeImportResult inspection = this.selectedInspection.orElse(null);
         if (inspection instanceof RecipeImportResult.Failure failure) {
@@ -402,7 +402,7 @@ public final class RecipeSelectScreen extends Screen {
         Minecraft.getInstance().setScreen(this.previous);
     }
 
-    private record RecipeRow(Recipe<?> recipe, int x, int y) {
+    private record RecipeRow(RecipeHolder<?> recipe, int x, int y) {
     }
 
     private record Layout(int left, int top, int width, int height, int listWidth,

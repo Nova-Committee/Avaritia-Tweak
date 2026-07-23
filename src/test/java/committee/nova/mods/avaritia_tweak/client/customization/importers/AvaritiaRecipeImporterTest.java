@@ -1,6 +1,5 @@
 package committee.nova.mods.avaritia_tweak.client.customization.importers;
 
-import com.google.gson.JsonParser;
 import committee.nova.mods.avaritia.common.crafting.recipe.CompressorRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.EternalSingularityCraftRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ExtremeSmithingRecipe;
@@ -14,13 +13,18 @@ import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -30,44 +34,48 @@ class AvaritiaRecipeImporterTest {
             new AvaritiaRecipeImporter.SpecialRecipeReader() {
                 @Override
                 public AvaritiaRecipeImporter.DecodedSpecial catalyst(
-                        InfinityCatalystCraftRecipe recipe) {
+                        InfinityCatalystCraftRecipe recipe, RegistryAccess registryAccess) {
                     return new AvaritiaRecipeImporter.DecodedSpecial(
-                            "custom", List.of(item(), tag()), 3);
+                            "custom", List.of(stone(), dirt()), 3);
                 }
 
                 @Override
                 public AvaritiaRecipeImporter.DecodedSpecial eternal(
-                        EternalSingularityCraftRecipe recipe) {
-                    return new AvaritiaRecipeImporter.DecodedSpecial("", List.of(item()), 4);
+                        EternalSingularityCraftRecipe recipe, RegistryAccess registryAccess) {
+                    return new AvaritiaRecipeImporter.DecodedSpecial("", List.of(stone()), 4);
                 }
             });
 
     @Test
     void importsAllSixAvaritiaRecipeKindsAndTheirSpecificFields() {
-        ShapedTableCraftingRecipe shaped = new ShapedTableCraftingRecipe(
-                id("test:shaped"), 2, 1, ingredients(item(), tag()),
-                null, 2, false);
+        ShapedTableCraftingRecipe shaped = mock(ShapedTableCraftingRecipe.class);
+        when(shaped.getTier()).thenReturn(2);
+        when(shaped.getWidth()).thenReturn(2);
+        when(shaped.getHeight()).thenReturn(1);
+        when(shaped.getIngredients()).thenReturn(ingredients(stone(), dirt()));
+        when(shaped.getResultItem(any())).thenReturn(ItemStack.EMPTY);
+
         ShapelessTableCraftingRecipe shapeless = new ShapelessTableCraftingRecipe(
-                id("test:shapeless"), ingredients(item(), tag()), null, 3);
-        CompressorRecipe compressor = new CompressorRecipe(
-                id("test:compressor"), item(), null, 800, 120);
+                ingredients(stone(), dirt()), ItemStack.EMPTY, 3);
+        CompressorRecipe compressor = new CompressorRecipe(stone(), ItemStack.EMPTY, 800, 120);
         ExtremeSmithingRecipe smithing = new ExtremeSmithingRecipe(
-                id("test:smithing"), item(), tag(), item(), null);
+                stone(), dirt(), stone(), ItemStack.EMPTY);
 
         CustomizationEntry.ShapedTable importedShaped = (CustomizationEntry.ShapedTable)
-                success(shaped);
+                success("test:shaped", shaped);
         CustomizationEntry.ShapelessTable importedShapeless = (CustomizationEntry.ShapelessTable)
-                success(shapeless);
+                success("test:shapeless", shapeless);
         CustomizationEntry.Compressor importedCompressor = (CustomizationEntry.Compressor)
-                success(compressor);
+                success("test:compressor", compressor);
         CustomizationEntry.ExtremeSmithing importedSmithing = (CustomizationEntry.ExtremeSmithing)
-                success(smithing);
+                success("test:smithing", smithing);
         CustomizationEntry.InfinityCatalyst importedCatalyst =
-                (CustomizationEntry.InfinityCatalyst) success(catalyst());
+                (CustomizationEntry.InfinityCatalyst) success("test:catalyst", catalyst());
         CustomizationEntry.EternalSingularity importedEternal =
-                (CustomizationEntry.EternalSingularity) success(eternal());
+                (CustomizationEntry.EternalSingularity) success("test:eternal", eternal());
 
         assertThat(importedShaped.tier()).isEqualTo(CraftingTier.NETHER);
+        assertThat(importedShaped.id()).isEqualTo(id("test:shaped"));
         assertThat(importedShaped.ingredients()).hasSize(2);
         assertThat(importedShaped.result().count()).isEqualTo(1);
         assertThat(importedShapeless.tier()).isEqualTo(CraftingTier.END);
@@ -84,53 +92,47 @@ class AvaritiaRecipeImporterTest {
 
     @Test
     void rejectsDatapackRecipeTargetBeforeCreatingAnEntry() {
-        CompressorRecipe recipe = new CompressorRecipe(
-                id("test:compressor"), item(), null, 1, 1);
+        CompressorRecipe recipe = new CompressorRecipe(stone(), ItemStack.EMPTY, 1, 1);
 
-        assertThat(this.importer.importRecipe(recipe, OutputTarget.DATAPACK, RegistryAccess.EMPTY))
+        assertThat(this.importer.importRecipe(holder("test:compressor", recipe),
+                OutputTarget.DATAPACK, RegistryAccess.EMPTY))
                 .isInstanceOfSatisfying(RecipeImportResult.Failure.class,
                         failure -> assertThat(failure.code())
                                 .isEqualTo("recipe.target.unsupported"));
     }
 
-    private CustomizationEntry success(net.minecraft.world.item.crafting.Recipe<?> recipe) {
+    private CustomizationEntry success(String recipeId, Recipe<?> recipe) {
         assertThat(this.importer.supports(recipe)).isTrue();
         RecipeImportResult result = this.importer.importRecipe(
-                recipe, OutputTarget.KUBEJS, RegistryAccess.EMPTY);
+                holder(recipeId, recipe), OutputTarget.KUBEJS, RegistryAccess.EMPTY);
         assertThat(result).isInstanceOf(RecipeImportResult.Success.class);
         return ((RecipeImportResult.Success) result).entry();
     }
 
     private static InfinityCatalystCraftRecipe catalyst() {
-        InfinityCatalystCraftRecipe recipe = mock(InfinityCatalystCraftRecipe.class);
-        when(recipe.getId()).thenReturn(id("test:catalyst"));
-        return recipe;
+        return mock(InfinityCatalystCraftRecipe.class);
     }
 
     private static EternalSingularityCraftRecipe eternal() {
-        EternalSingularityCraftRecipe recipe = mock(EternalSingularityCraftRecipe.class);
-        when(recipe.getId()).thenReturn(id("test:eternal"));
-        return recipe;
+        return mock(EternalSingularityCraftRecipe.class);
     }
 
-    private static Ingredient item() {
-        return ingredient("{\"item\":\"minecraft:stone\"}");
+    private static Ingredient stone() {
+        return Ingredient.of(Items.STONE);
     }
 
-    private static Ingredient tag() {
-        return ingredient("{\"tag\":\"forge:ingots/iron\"}");
-    }
-
-    private static Ingredient ingredient(String json) {
-        Ingredient ingredient = mock(Ingredient.class);
-        when(ingredient.toJson()).thenReturn(JsonParser.parseString(json));
-        return ingredient;
+    private static Ingredient dirt() {
+        return Ingredient.of(Items.DIRT);
     }
 
     private static NonNullList<Ingredient> ingredients(Ingredient... values) {
         NonNullList<Ingredient> result = NonNullList.create();
         result.addAll(List.of(values));
         return result;
+    }
+
+    private static <T extends Recipe<?>> RecipeHolder<T> holder(String value, T recipe) {
+        return new RecipeHolder<>(id(value), recipe);
     }
 
     private static ResourceLocation id(String value) {

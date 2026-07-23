@@ -11,7 +11,7 @@ import committee.nova.mods.avaritia_tweak.customization.render.PreviewService;
 import committee.nova.mods.avaritia_tweak.customization.render.WorkspaceRenderService;
 import committee.nova.mods.avaritia_tweak.customization.validation.MinecraftRegistryLookup;
 import committee.nova.mods.avaritia_tweak.customization.validation.WorkspaceValidator;
-import net.minecraftforge.fml.loading.FMLPaths;
+import net.neoforged.fml.loading.FMLPaths;
 
 import java.nio.file.Path;
 import java.time.Clock;

@@ -2,18 +2,21 @@ package committee.nova.mods.avaritia_tweak.client.customization.importers;
 
 import com.google.gson.JsonParser;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.common.crafting.DataComponentIngredient;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class IngredientImporterTest {
     private final IngredientImporter importer = new IngredientImporter();
 
     @Test
-    void importsSingleItemTagAndStrictNbtWithoutExpandingCandidates() {
+    void importsSingleItemTagAndNeoForgeStrictComponentsWithoutExpandingCandidates() {
         IngredientImportResult item = importJson("""
                 {"item":"minecraft:stone"}
                 """);
@@ -21,7 +24,7 @@ class IngredientImporterTest {
                 {"tag":"forge:ingots/iron"}
                 """);
         IngredientImportResult strict = importJson("""
-                {"type":"forge:nbt","item":"minecraft:diamond","nbt":"{display:{Name:'strict'}}"}
+                {"type":"neoforge:components","items":"minecraft:diamond","components":{"minecraft:custom_data":"{display:{Name:'strict'}}"},"strict":true}
                 """);
 
         assertThat(((IngredientImportResult.Success) item).ingredient())
@@ -39,6 +42,33 @@ class IngredientImporterTest {
     }
 
     @Test
+    void keepsLegacyForgeNbtImportCompatibility() {
+        IngredientImportResult strict = importJson("""
+                {"type":"forge:nbt","item":"minecraft:diamond","nbt":"{legacy:1b}"}
+                """);
+
+        IngredientSpec.Item strictItem = (IngredientSpec.Item)
+                ((IngredientImportResult.Success) strict).ingredient();
+        assertThat(strictItem.strictNbt().orElseThrow().getBoolean("legacy")).isTrue();
+    }
+
+    @Test
+    void importsIngredientProducedByNeoForgeRuntimeCodec() {
+        CompoundTag nbt = new CompoundTag();
+        nbt.putString("mode", "runtime");
+        Ingredient encoded = DataComponentIngredient.of(true, DataComponents.CUSTOM_DATA,
+                CustomData.of(nbt), Items.DIAMOND);
+
+        IngredientImportResult result = this.importer.importIngredient(encoded, "ingredient");
+
+        assertThat(result).isInstanceOfSatisfying(IngredientImportResult.Success.class, success -> {
+            IngredientSpec.Item item = (IngredientSpec.Item) success.ingredient();
+            assertThat(item.itemId().toString()).isEqualTo("minecraft:diamond");
+            assertThat(item.strictNbt().orElseThrow().getString("mode")).isEqualTo("runtime");
+        });
+    }
+
+    @Test
     void rejectsMultipleChoiceAndUnknownCustomIngredientsWithFieldLocation() {
         IngredientImportResult multiple = importJson("""
                 [{"item":"minecraft:stone"},{"item":"minecraft:dirt"}]
@@ -48,6 +78,9 @@ class IngredientImporterTest {
                 """);
         IngredientImportResult malformed = importJson("""
                 {"item":{"not":"a string"}}
+                """);
+        IngredientImportResult partialComponents = importJson("""
+                {"type":"neoforge:components","items":"minecraft:stone","components":{"minecraft:custom_data":"{value:1}"}}
                 """);
 
         assertThat(multiple).isInstanceOfSatisfying(IngredientImportResult.Failure.class, failure -> {
@@ -60,11 +93,11 @@ class IngredientImporterTest {
         });
         assertThat(malformed).isInstanceOfSatisfying(IngredientImportResult.Failure.class,
                 failure -> assertThat(failure.code()).isEqualTo("ingredient.id.invalid"));
+        assertThat(partialComponents).isInstanceOfSatisfying(IngredientImportResult.Failure.class,
+                failure -> assertThat(failure.code()).isEqualTo("ingredient.components.unsupported"));
     }
 
     private IngredientImportResult importJson(String json) {
-        Ingredient ingredient = mock(Ingredient.class);
-        when(ingredient.toJson()).thenReturn(JsonParser.parseString(json));
-        return this.importer.importIngredient(ingredient, "ingredients[3]");
+        return this.importer.importSerialized(JsonParser.parseString(json), "ingredients[3]");
     }
 }

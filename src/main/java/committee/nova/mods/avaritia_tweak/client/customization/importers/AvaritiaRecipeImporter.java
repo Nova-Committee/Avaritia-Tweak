@@ -6,6 +6,7 @@ import committee.nova.mods.avaritia.common.crafting.recipe.ExtremeSmithingRecipe
 import committee.nova.mods.avaritia.common.crafting.recipe.InfinityCatalystCraftRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ShapedTableCraftingRecipe;
 import committee.nova.mods.avaritia.common.crafting.recipe.ShapelessTableCraftingRecipe;
+import committee.nova.mods.avaritia_tweak.customization.minecraft.MinecraftItemStacks;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
@@ -14,12 +15,13 @@ import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.neoforged.neoforge.network.connection.ConnectionType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,8 +38,7 @@ public final class AvaritiaRecipeImporter {
     }
 
     public AvaritiaRecipeImporter(IngredientImporter ingredientImporter) {
-        this(ingredientImporter, AvaritiaRecipeImporter::readMinecraftItemStack,
-                new NetworkSpecialRecipeReader());
+        this(ingredientImporter, MinecraftItemStacks::toSpec, new NetworkSpecialRecipeReader());
     }
 
     AvaritiaRecipeImporter(IngredientImporter ingredientImporter,
@@ -47,67 +48,76 @@ public final class AvaritiaRecipeImporter {
         this.specialRecipes = specialRecipes;
     }
 
-    public boolean supports(Recipe<?> recipe) {
+    public boolean supports(RecipeHolder<?> holder) {
+        return supports(holder.value());
+    }
+
+    boolean supports(Recipe<?> recipe) {
         return recipe instanceof ShapedTableCraftingRecipe
                 || recipe instanceof ShapelessTableCraftingRecipe
                 || recipe instanceof CompressorRecipe
                 || recipe instanceof ExtremeSmithingRecipe;
     }
 
-    public RecipeImportResult importRecipe(Recipe<?> recipe, OutputTarget target,
+    public RecipeImportResult importRecipe(RecipeHolder<?> holder, OutputTarget target,
                                            RegistryAccess registryAccess) {
+        return importRecipe(holder.id(), holder.value(), target, registryAccess);
+    }
+
+    RecipeImportResult importRecipe(ResourceLocation recipeId, Recipe<?> recipe, OutputTarget target,
+                                    RegistryAccess registryAccess) {
         if (target == OutputTarget.DATAPACK) {
-            return failure(recipe, "target", "recipe.target.unsupported",
+            return failure(recipeId, "target", "recipe.target.unsupported",
                     "Recipes can only target KubeJS or CraftTweaker");
         }
         try {
             if (recipe instanceof InfinityCatalystCraftRecipe catalyst) {
-                return importCatalyst(catalyst, target);
+                return importCatalyst(recipeId, catalyst, target, registryAccess);
             }
             if (recipe instanceof EternalSingularityCraftRecipe eternal) {
-                return importEternal(eternal, target);
+                return importEternal(recipeId, eternal, target, registryAccess);
             }
             if (recipe instanceof ShapedTableCraftingRecipe shaped) {
-                return importShaped(shaped, target, registryAccess);
+                return importShaped(recipeId, shaped, target, registryAccess);
             }
             if (recipe instanceof ShapelessTableCraftingRecipe shapeless) {
-                return importShapeless(shapeless, target, registryAccess);
+                return importShapeless(recipeId, shapeless, target, registryAccess);
             }
             if (recipe instanceof CompressorRecipe compressor) {
                 IngredientImportResult input = this.ingredientImporter.importIngredient(
                         compressor.getInput(), "ingredient");
-                if (input instanceof IngredientImportResult.Failure failure) {
-                    return failure(recipe, failure);
+                if (input instanceof IngredientImportResult.Failure importFailure) {
+                    return failure(recipeId, importFailure);
                 }
-                return new RecipeImportResult.Success(new CustomizationEntry.Compressor(recipe.getId(), target,
+                return new RecipeImportResult.Success(new CustomizationEntry.Compressor(recipeId, target,
                         ((IngredientImportResult.Success) input).ingredient(),
                         itemStack(compressor.getResultItem(registryAccess)),
                         compressor.getInputCount(), compressor.getTimeCost()));
             }
             if (recipe instanceof ExtremeSmithingRecipe smithing) {
-                ImportedIngredients imported = importIngredients(recipe,
+                ImportedIngredients imported = importIngredients(recipeId,
                         List.of(smithing.template, smithing.base, smithing.additions),
                         List.of("template", "base", "addition"));
                 if (imported.failure != null) {
                     return imported.failure;
                 }
-                return new RecipeImportResult.Success(new CustomizationEntry.ExtremeSmithing(recipe.getId(), target,
+                return new RecipeImportResult.Success(new CustomizationEntry.ExtremeSmithing(recipeId, target,
                         imported.ingredients.get(0), imported.ingredients.get(1), imported.ingredients.get(2),
                         itemStack(smithing.getResultItem(registryAccess))));
             }
-            return failure(recipe, "kind", "recipe.kind.unsupported",
+            return failure(recipeId, "kind", "recipe.kind.unsupported",
                     "Only Avaritia 1.4.1 visual-editor recipe types are supported");
         } catch (RuntimeException exception) {
-            return failure(recipe, "$", "recipe.import.failed",
+            return failure(recipeId, "$", "recipe.import.failed",
                     exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage());
         }
     }
 
-    private RecipeImportResult importShaped(ShapedTableCraftingRecipe recipe, OutputTarget target,
-                                            RegistryAccess registryAccess) {
+    private RecipeImportResult importShaped(ResourceLocation recipeId, ShapedTableCraftingRecipe recipe,
+                                            OutputTarget target, RegistryAccess registryAccess) {
         Optional<CraftingTier> tier = CraftingTier.fromValue(recipe.getTier());
         if (tier.isEmpty()) {
-            return failure(recipe, "tier", "recipe.tier.unsupported", "Unsupported table tier");
+            return failure(recipeId, "tier", "recipe.tier.unsupported", "Unsupported table tier");
         }
         TreeMap<Integer, IngredientSpec> grid = new TreeMap<>();
         NonNullList<Ingredient> encoded = recipe.getIngredients();
@@ -120,59 +130,61 @@ public final class AvaritiaRecipeImporter {
                 }
                 String field = "ingredients[" + sourceIndex + "]";
                 IngredientImportResult imported = this.ingredientImporter.importIngredient(ingredient, field);
-                if (imported instanceof IngredientImportResult.Failure failure) {
-                    return failure(recipe, failure);
+                if (imported instanceof IngredientImportResult.Failure importFailure) {
+                    return failure(recipeId, importFailure);
                 }
                 grid.put(row * tier.get().gridSize() + column,
                         ((IngredientImportResult.Success) imported).ingredient());
             }
         }
-        return new RecipeImportResult.Success(new CustomizationEntry.ShapedTable(recipe.getId(), target,
+        return new RecipeImportResult.Success(new CustomizationEntry.ShapedTable(recipeId, target,
                 tier.get(), grid, itemStack(recipe.getResultItem(registryAccess))));
     }
 
-    private RecipeImportResult importShapeless(ShapelessTableCraftingRecipe recipe, OutputTarget target,
-                                               RegistryAccess registryAccess) {
+    private RecipeImportResult importShapeless(ResourceLocation recipeId, ShapelessTableCraftingRecipe recipe,
+                                               OutputTarget target, RegistryAccess registryAccess) {
         Optional<CraftingTier> tier = CraftingTier.fromValue(recipe.getTier());
         if (tier.isEmpty()) {
-            return failure(recipe, "tier", "recipe.tier.unsupported", "Unsupported table tier");
+            return failure(recipeId, "tier", "recipe.tier.unsupported", "Unsupported table tier");
         }
-        ImportedIngredients imported = importIngredients(recipe, recipe.getIngredients(), null);
+        ImportedIngredients imported = importIngredients(recipeId, recipe.getIngredients(), null);
         if (imported.failure != null) {
             return imported.failure;
         }
-        return new RecipeImportResult.Success(new CustomizationEntry.ShapelessTable(recipe.getId(), target,
+        return new RecipeImportResult.Success(new CustomizationEntry.ShapelessTable(recipeId, target,
                 tier.get(), imported.ingredients, itemStack(recipe.getResultItem(registryAccess))));
     }
 
-    private RecipeImportResult importCatalyst(InfinityCatalystCraftRecipe recipe, OutputTarget target) {
-        DecodedSpecial decoded = this.specialRecipes.catalyst(recipe);
-        ImportedIngredients imported = importIngredients(recipe, decoded.ingredients, null);
+    private RecipeImportResult importCatalyst(ResourceLocation recipeId, InfinityCatalystCraftRecipe recipe,
+                                              OutputTarget target, RegistryAccess registryAccess) {
+        DecodedSpecial decoded = this.specialRecipes.catalyst(recipe, registryAccess);
+        ImportedIngredients imported = importIngredients(recipeId, decoded.ingredients, null);
         if (imported.failure != null) {
             return imported.failure;
         }
-        return new RecipeImportResult.Success(new CustomizationEntry.InfinityCatalyst(recipe.getId(), target,
+        return new RecipeImportResult.Success(new CustomizationEntry.InfinityCatalyst(recipeId, target,
                 decoded.group, imported.ingredients, decoded.count));
     }
 
-    private RecipeImportResult importEternal(EternalSingularityCraftRecipe recipe, OutputTarget target) {
-        DecodedSpecial decoded = this.specialRecipes.eternal(recipe);
-        ImportedIngredients imported = importIngredients(recipe, decoded.ingredients, null);
+    private RecipeImportResult importEternal(ResourceLocation recipeId, EternalSingularityCraftRecipe recipe,
+                                             OutputTarget target, RegistryAccess registryAccess) {
+        DecodedSpecial decoded = this.specialRecipes.eternal(recipe, registryAccess);
+        ImportedIngredients imported = importIngredients(recipeId, decoded.ingredients, null);
         if (imported.failure != null) {
             return imported.failure;
         }
-        return new RecipeImportResult.Success(new CustomizationEntry.EternalSingularity(recipe.getId(), target,
+        return new RecipeImportResult.Success(new CustomizationEntry.EternalSingularity(recipeId, target,
                 imported.ingredients, decoded.count));
     }
 
-    private ImportedIngredients importIngredients(Recipe<?> recipe, List<Ingredient> encoded,
+    private ImportedIngredients importIngredients(ResourceLocation recipeId, List<Ingredient> encoded,
                                                   List<String> fieldNames) {
         List<IngredientSpec> result = new ArrayList<>();
         for (int index = 0; index < encoded.size(); index++) {
             String field = fieldNames == null ? "ingredients[" + index + "]" : fieldNames.get(index);
             IngredientImportResult imported = this.ingredientImporter.importIngredient(encoded.get(index), field);
-            if (imported instanceof IngredientImportResult.Failure failure) {
-                return new ImportedIngredients(List.of(), failure(recipe, failure));
+            if (imported instanceof IngredientImportResult.Failure importFailure) {
+                return new ImportedIngredients(List.of(), failure(recipeId, importFailure));
             }
             result.add(((IngredientImportResult.Success) imported).ingredient());
         }
@@ -183,26 +195,17 @@ public final class AvaritiaRecipeImporter {
         return this.itemStacks.read(stack);
     }
 
-    private static ItemStackSpec readMinecraftItemStack(ItemStack stack) {
-        if (stack.isEmpty()) {
-            throw new IllegalArgumentException("Recipe output is empty");
-        }
-        ResourceLocation id = ForgeRegistries.ITEMS.getKey(stack.getItem());
-        if (id == null) {
-            throw new IllegalArgumentException("Recipe output item is not registered");
-        }
-        return new ItemStackSpec(id, stack.getCount(), Optional.ofNullable(stack.getTag()));
-    }
-
-    private static DecodedSpecial decodeCatalystNetwork(InfinityCatalystCraftRecipe recipe) {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+    private static DecodedSpecial decodeCatalystNetwork(InfinityCatalystCraftRecipe recipe,
+                                                        RegistryAccess registryAccess) {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
+                Unpooled.buffer(), registryAccess, ConnectionType.OTHER);
         try {
-            new InfinityCatalystCraftRecipe.Serializer().toNetwork(buffer, recipe);
+            InfinityCatalystCraftRecipe.Serializer.STREAM_CODEC.encode(buffer, recipe);
             String group = buffer.readUtf();
             int size = buffer.readVarInt();
             List<Ingredient> ingredients = new ArrayList<>();
             for (int index = 0; index < size; index++) {
-                ingredients.add(Ingredient.fromNetwork(buffer));
+                ingredients.add(Ingredient.CONTENTS_STREAM_CODEC.decode(buffer));
             }
             return new DecodedSpecial(group, ingredients, buffer.readInt());
         } finally {
@@ -210,14 +213,16 @@ public final class AvaritiaRecipeImporter {
         }
     }
 
-    private static DecodedSpecial decodeEternalNetwork(EternalSingularityCraftRecipe recipe) {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+    private static DecodedSpecial decodeEternalNetwork(EternalSingularityCraftRecipe recipe,
+                                                       RegistryAccess registryAccess) {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(
+                Unpooled.buffer(), registryAccess, ConnectionType.OTHER);
         try {
-            new EternalSingularityCraftRecipe.Serializer().toNetwork(buffer, recipe);
+            EternalSingularityCraftRecipe.Serializer.STREAM_CODEC.encode(buffer, recipe);
             int size = buffer.readVarInt();
             List<Ingredient> ingredients = new ArrayList<>();
             for (int index = 0; index < size; index++) {
-                ingredients.add(Ingredient.fromNetwork(buffer));
+                ingredients.add(Ingredient.CONTENTS_STREAM_CODEC.decode(buffer));
             }
             return new DecodedSpecial("", ingredients, buffer.readInt());
         } finally {
@@ -225,14 +230,14 @@ public final class AvaritiaRecipeImporter {
         }
     }
 
-    private static RecipeImportResult.Failure failure(Recipe<?> recipe,
+    private static RecipeImportResult.Failure failure(ResourceLocation recipeId,
                                                        IngredientImportResult.Failure failure) {
-        return failure(recipe, failure.fieldPath(), failure.code(), failure.message());
+        return failure(recipeId, failure.fieldPath(), failure.code(), failure.message());
     }
 
-    private static RecipeImportResult.Failure failure(Recipe<?> recipe, String field,
+    private static RecipeImportResult.Failure failure(ResourceLocation recipeId, String field,
                                                        String code, String message) {
-        return new RecipeImportResult.Failure(recipe.getId(), field, code, message);
+        return new RecipeImportResult.Failure(recipeId, field, code, message);
     }
 
     @FunctionalInterface
@@ -241,9 +246,9 @@ public final class AvaritiaRecipeImporter {
     }
 
     interface SpecialRecipeReader {
-        DecodedSpecial catalyst(InfinityCatalystCraftRecipe recipe);
+        DecodedSpecial catalyst(InfinityCatalystCraftRecipe recipe, RegistryAccess registryAccess);
 
-        DecodedSpecial eternal(EternalSingularityCraftRecipe recipe);
+        DecodedSpecial eternal(EternalSingularityCraftRecipe recipe, RegistryAccess registryAccess);
     }
 
     record DecodedSpecial(String group, List<Ingredient> ingredients, int count) {
@@ -254,13 +259,13 @@ public final class AvaritiaRecipeImporter {
 
     private static final class NetworkSpecialRecipeReader implements SpecialRecipeReader {
         @Override
-        public DecodedSpecial catalyst(InfinityCatalystCraftRecipe recipe) {
-            return decodeCatalystNetwork(recipe);
+        public DecodedSpecial catalyst(InfinityCatalystCraftRecipe recipe, RegistryAccess registryAccess) {
+            return decodeCatalystNetwork(recipe, registryAccess);
         }
 
         @Override
-        public DecodedSpecial eternal(EternalSingularityCraftRecipe recipe) {
-            return decodeEternalNetwork(recipe);
+        public DecodedSpecial eternal(EternalSingularityCraftRecipe recipe, RegistryAccess registryAccess) {
+            return decodeEternalNetwork(recipe, registryAccess);
         }
     }
 

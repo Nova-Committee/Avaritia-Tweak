@@ -181,24 +181,25 @@ public final class CraftTweakerRenderer implements ArtifactRenderer {
         }
         IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
         String base = "<item:" + item.itemId() + ">";
-        return item.strictNbt().map(nbt -> {
-            String snbt = NbtText.canonical(nbt);
-            String conditionId = "avaritia_tweak_strict_" + ContentHashes.sha256(item.itemId() + "\n" + snbt)
-                    .substring(0, 16);
-            return base + ".onlyIf(" + ScriptEscaper.quote(conditionId)
-                    + ", stack => stack.matches(" + base + ".withTag(" + snbt + "), true))";
-        }).orElse(base);
+        return item.strictNbt()
+                .map(nbt -> withCustomData(base, nbt))
+                .orElse(base);
     }
 
     static String itemStack(ItemStackSpec stack) {
         String value = "<item:" + stack.itemId() + ">";
         if (stack.nbt().isPresent()) {
-            value += ".withTag(" + NbtText.canonical(stack.nbt().orElseThrow()) + ")";
+            value = withCustomData(value, stack.nbt().orElseThrow());
         }
         if (stack.count() != 1) {
             value += " * " + stack.count();
         }
         return value;
+    }
+
+    private static String withCustomData(String itemStack, net.minecraft.nbt.CompoundTag data) {
+        return itemStack + ".withJsonComponent(<componenttype:minecraft:custom_data>, "
+                + NbtText.canonical(data) + ")";
     }
 
     private static String rgb(int color) {

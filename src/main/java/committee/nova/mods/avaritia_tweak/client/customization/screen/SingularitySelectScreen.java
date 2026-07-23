@@ -131,7 +131,7 @@ final class SingularitySelectScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
         Layout layout = layout();
         int next = Math.max(0, Math.min(maxPage(pageSize(layout)),
                 this.page + (delta < 0 ? 1 : -1)));
