@@ -67,7 +67,7 @@ class AvaritiaRecipeImporterTest {
                 ingredients(stone(), dirt()), ItemStack.EMPTY, 3);
         CompressorRecipe compressor = new CompressorRecipe(stone(), ItemStack.EMPTY, 800, 120);
         ExtremeSmithingRecipe smithing = new ExtremeSmithingRecipe(
-                stone(), dirt(), CompoundIngredient.of(stone(), dirt()), ItemStack.EMPTY);
+                stone(), dirt(), CompoundIngredient.of(stone(), dirt(), diamond()), ItemStack.EMPTY);
 
         CustomizationEntry.ShapedTable importedShaped = (CustomizationEntry.ShapedTable)
                 success("test:shaped", shaped);
@@ -90,10 +90,10 @@ class AvaritiaRecipeImporterTest {
         assertThat(importedShapeless.ingredients()).hasSize(2);
         assertThat(importedCompressor.inputCount()).isEqualTo(800);
         assertThat(importedCompressor.timeCost()).isEqualTo(120);
-        assertThat(importedSmithing.addition()).isInstanceOfSatisfying(IngredientSpec.Choice.class,
-                choice -> assertThat(choice.alternatives()).containsExactly(
-                        new IngredientSpec.Item(id("minecraft:stone")),
-                        new IngredientSpec.Item(id("minecraft:dirt"))));
+        assertThat(importedSmithing.additions()).containsExactly(
+                new IngredientSpec.Item(id("minecraft:stone")),
+                new IngredientSpec.Item(id("minecraft:dirt")),
+                new IngredientSpec.Item(id("minecraft:diamond")));
         assertThat(importedCatalyst.group()).isEqualTo("custom");
         assertThat(importedCatalyst.count()).isEqualTo(3);
         assertThat(importedCatalyst.ingredients()).hasSize(2);
@@ -167,9 +167,11 @@ class AvaritiaRecipeImporterTest {
                 holder("avaritia:neutron_horse_armor", recipe),
                 OutputTarget.CRAFTTWEAKER, RegistryAccess.EMPTY);
 
-        assertThat(imported.addition()).isInstanceOfSatisfying(IngredientSpec.Choice.class,
-                choice -> assertThat(choice.alternatives())
-                        .anyMatch(IngredientSpec.Components.class::isInstance));
+        assertThat(imported.additions()).hasSize(3);
+        assertThat(imported.additions().get(0)).isInstanceOf(IngredientSpec.Components.class);
+        assertThat(imported.additions().subList(1, 3)).containsExactly(
+                new IngredientSpec.Item(id("minecraft:stone")),
+                new IngredientSpec.Item(id("minecraft:dirt")));
         assertThat(craftTweaker).isInstanceOfSatisfying(RecipeImportResult.Failure.class,
                 failure -> assertThat(failure.code())
                         .isEqualTo("ingredient.components.target_unsupported"));
@@ -197,6 +199,10 @@ class AvaritiaRecipeImporterTest {
 
     private static Ingredient dirt() {
         return Ingredient.of(Items.DIRT);
+    }
+
+    private static Ingredient diamond() {
+        return Ingredient.of(Items.DIAMOND);
     }
 
     private static NonNullList<Ingredient> ingredients(Ingredient... values) {

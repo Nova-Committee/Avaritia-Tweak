@@ -169,15 +169,17 @@ class RendererTest {
     }
 
     @Test
-    void rendersChoiceIngredientsWithoutDroppingAlternatives() {
+    void rendersThreeSmithingAdditionSlotsAsOneApiMatcherWithoutDroppingInputs() {
         IngredientSpec.Choice choice = new IngredientSpec.Choice(List.of(
                 item("minecraft:stone"), item("minecraft:dirt")));
+        List<IngredientSpec> additions = List.of(item("minecraft:stone"), item("minecraft:dirt"),
+                item("minecraft:diamond"));
         CustomizationEntry.ExtremeSmithing kubeRecipe = new CustomizationEntry.ExtremeSmithing(
                 id("test:choice"), OutputTarget.KUBEJS, item("minecraft:stone"),
-                item("minecraft:diamond"), choice, result());
+                item("minecraft:diamond"), additions, result());
         CustomizationEntry.ExtremeSmithing craftTweakerRecipe = new CustomizationEntry.ExtremeSmithing(
                 id("test:choice"), OutputTarget.CRAFTTWEAKER, item("minecraft:stone"),
-                item("minecraft:diamond"), choice, result());
+                item("minecraft:diamond"), additions, result());
 
         String js = new KubeJsRenderer().render(snapshot(kubeRecipe)).get(0).text();
         String zs = new CraftTweakerRenderer().render(snapshot(craftTweakerRecipe)).get(0).text();
@@ -189,10 +191,10 @@ class RendererTest {
 
         assertThat(js).contains("event.custom({", "\"type\": \"avaritia:extreme_smithing\"",
                 "\"addition\": [", "\"item\": \"minecraft:stone\"",
-                "\"item\": \"minecraft:dirt\"");
+                "\"item\": \"minecraft:dirt\"", "\"item\": \"minecraft:diamond\"");
         assertThat(KubeJsRenderer.ingredient(choice))
                 .isEqualTo("Ingredient.of([\"minecraft:stone\", \"minecraft:dirt\"])");
-        assertThat(zs).contains("(<item:minecraft:stone> | <item:minecraft:dirt>)");
+        assertThat(zs).contains("(<item:minecraft:stone> | <item:minecraft:dirt> | <item:minecraft:diamond>)");
         assertThat(decoded.test(new ItemStack(Items.STONE))).isTrue();
         assertThat(decoded.test(new ItemStack(Items.DIRT))).isTrue();
         assertThat(decoded.test(new ItemStack(Items.DIAMOND))).isFalse();
@@ -274,7 +276,8 @@ class RendererTest {
                         item("minecraft:stone"), result(), 1000, 240),
                 new CustomizationEntry.ExtremeSmithing(id("test:smithing"), target,
                         item("minecraft:stone"), item("minecraft:diamond"),
-                        item("minecraft:netherite_ingot"), result()),
+                        List.of(item("minecraft:netherite_ingot"), item("minecraft:netherite_ingot"),
+                                item("minecraft:netherite_ingot")), result()),
                 new CustomizationEntry.InfinityCatalyst(id("test:catalyst"), target, "default",
                         List.of(item("minecraft:stone")), 2),
                 new CustomizationEntry.EternalSingularity(id("test:eternal"), target,

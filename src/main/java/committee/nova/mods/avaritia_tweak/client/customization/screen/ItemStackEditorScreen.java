@@ -131,10 +131,14 @@ public final class ItemStackEditorScreen extends ThemedEditorScreen {
         if (!preview.isEmpty()) {
             graphics.renderItem(preview, slotX + 10, slotY + 10);
             graphics.renderItemDecorations(this.font, preview, slotX + 10, slotY + 10);
+            ItemDisplayText display = ItemDisplayText.of(preview);
+            graphics.drawCenteredString(this.font, ScreenText.fit(this.font, display.name(),
+                            PREVIEW_RAIL_WIDTH - 12),
+                    layout.left + PREVIEW_RAIL_WIDTH / 2, slotY + 45, EditorTheme.TEXT);
+            graphics.drawCenteredString(this.font, ScreenText.fit(this.font, display.id(),
+                            PREVIEW_RAIL_WIDTH - 12),
+                    layout.left + PREVIEW_RAIL_WIDTH / 2, slotY + 56, EditorTheme.TEXT_FAINT);
         }
-        graphics.drawCenteredString(this.font, ScreenText.fit(this.font, this.idText,
-                        PREVIEW_RAIL_WIDTH - 12),
-                layout.left + PREVIEW_RAIL_WIDTH / 2, slotY + 45, EditorTheme.TEXT_FAINT);
 
         int contentX = layout.left + PREVIEW_RAIL_WIDTH + 12;
         int contentWidth = layout.width - PREVIEW_RAIL_WIDTH - 22;

@@ -12,6 +12,7 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -58,14 +59,18 @@ public final class GhostItemStackButton extends AbstractButton {
         graphics.renderItem(stack, this.getX() + 1, this.getY() + 1);
         graphics.renderItemDecorations(Minecraft.getInstance().font, stack, this.getX() + 1, this.getY() + 1);
         if (this.isHovered()) {
+            ItemDisplayText display = ItemDisplayText.of(stack);
             graphics.renderTooltip(Minecraft.getInstance().font,
-                    Component.literal(current.itemId() + " × " + current.count()
-                            + (current.nbt().isPresent() ? " (NBT)" : "")), mouseX, mouseY);
+                    display.tooltip(" × " + current.count(),
+                            current.nbt().isPresent() ? " (NBT)" : ""),
+                    Optional.empty(), mouseX, mouseY);
         }
     }
 
     @Override
     protected void updateWidgetNarration(@NotNull NarrationElementOutput output) {
-        output.add(NarratedElementType.TITLE, this.getMessage());
+        ItemStackSpec current = this.value.get();
+        output.add(NarratedElementType.TITLE, Component.literal(this.getMessage().getString() + ", "
+                + ItemDisplayText.of(current.itemId()).inline() + " × " + current.count()));
     }
 }

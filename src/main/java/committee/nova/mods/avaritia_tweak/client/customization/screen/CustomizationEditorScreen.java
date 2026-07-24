@@ -737,19 +737,24 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     }
 
     private void addSmithingEditor(int x, int y, int width) {
-        int spacing = Math.max(48, (width - 18) / 4);
+        int spacing = Math.max(48, (width - 18) / 3);
         addCompactIngredientSlot(x, y, Component.translatable("gui.avaritia_tweak.template"),
                 this.form.template(), this.form::template);
         addCompactIngredientSlot(x + spacing, y, Component.translatable("gui.avaritia_tweak.base"),
                 this.form.base(), this.form::base);
-        addCompactIngredientSlot(x + spacing * 2, y,
-                Component.translatable("gui.avaritia_tweak.addition"),
-                this.form.addition(), this.form::addition);
-        this.labels.add(new Label(x + spacing * 3, y,
+        this.labels.add(new Label(x + spacing * 2, y,
                 Component.translatable("gui.avaritia_tweak.result"), EditorTheme.TEXT_MUTED));
-        this.addRenderableWidget(new GhostItemStackButton(x + spacing * 3, y + 11,
+        this.addRenderableWidget(new GhostItemStackButton(x + spacing * 2, y + 11,
                 this.form::result, button -> openResult(),
                 (button, mouseX, mouseY) -> openResultContextMenu(mouseX, mouseY)));
+        List<IngredientSpec> additions = this.form.smithingAdditions();
+        for (int index = 0; index < additions.size(); index++) {
+            int slot = index;
+            IngredientSpec addition = additions.get(index);
+            addCompactIngredientSlot(x + spacing * index, y + 42,
+                    Component.translatable("gui.avaritia_tweak.addition_" + (index + 1)),
+                    addition, value -> this.form.smithingAddition(slot, value));
+        }
     }
 
     private void addCatalystEditor(int x, int y, int width) {

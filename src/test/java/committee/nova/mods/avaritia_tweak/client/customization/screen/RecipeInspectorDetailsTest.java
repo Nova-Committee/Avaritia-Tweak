@@ -70,13 +70,17 @@ class RecipeInspectorDetailsTest {
 
         CustomizationEntry.ExtremeSmithing smithing = new CustomizationEntry.ExtremeSmithing(
                 id("test:smithing"), OutputTarget.KUBEJS, item("minecraft:netherite_upgrade_smithing_template"),
-                item("minecraft:diamond_sword"), item("minecraft:nether_star"), result());
+                item("minecraft:diamond_sword"), List.of(item("minecraft:nether_star"),
+                item("minecraft:iron_ingot"), item("minecraft:gold_ingot")), result());
         RecipeInspectorDetails.Details smithingDetails = RecipeInspectorDetails.from(smithing);
 
+        assertThat(smithingDetails.columns()).isEqualTo(5);
+        assertThat(smithingDetails.slotCount()).isEqualTo(5);
         assertThat(smithingDetails.cells().values()).extracting(
                         RecipeInspectorDetails.IngredientCell::roleKey)
                 .containsExactly("gui.avaritia_tweak.template", "gui.avaritia_tweak.base",
-                        "gui.avaritia_tweak.addition");
+                        "gui.avaritia_tweak.addition_1", "gui.avaritia_tweak.addition_2",
+                        "gui.avaritia_tweak.addition_3");
     }
 
     @Test
@@ -153,7 +157,23 @@ class RecipeInspectorDetailsTest {
                 item("minecraft:stone"), tag("forge:gems/diamond")));
 
         assertThat(GhostIngredientButton.describe(choice))
-                .isEqualTo("OR: minecraft:stone | #forge:gems/diamond");
+                .startsWith("OR: ")
+                .contains(ItemDisplayText.of(id("minecraft:stone")).name(), "minecraft:stone",
+                        "#forge:gems/diamond");
+    }
+
+    @Test
+    void itemDisplayUsesNameFirstAndDoesNotDuplicateAnIdFallback() {
+        ItemDisplayText display = new ItemDisplayText("Stone", "minecraft:stone");
+
+        assertThat(display.inline()).isEqualTo("Stone · minecraft:stone");
+        assertThat(display.tooltip(" × 2", " (NBT)").stream().map(component -> component.getString()))
+                .containsExactly("Stone × 2", "minecraft:stone (NBT)");
+
+        ItemDisplayText fallback = new ItemDisplayText("minecraft:stone", "minecraft:stone");
+        assertThat(fallback.inline()).isEqualTo("minecraft:stone");
+        assertThat(fallback.tooltip(" × 2", " (NBT)").stream().map(component -> component.getString()))
+                .containsExactly("minecraft:stone × 2 (NBT)");
     }
 
     private static IngredientSpec item(String value) {

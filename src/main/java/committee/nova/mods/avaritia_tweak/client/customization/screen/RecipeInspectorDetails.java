@@ -43,10 +43,15 @@ final class RecipeInspectorDetails {
                             new Attribute(TIME_COST, Integer.toString(compressor.timeCost()))));
         }
         if (entry instanceof CustomizationEntry.ExtremeSmithing smithing) {
-            return new Details(smithing.kind(), 3, 3,
+            return new Details(smithing.kind(), 5, 5,
                     cells(new IngredientCell(smithing.template(), "gui.avaritia_tweak.template"),
                             new IngredientCell(smithing.base(), "gui.avaritia_tweak.base"),
-                            new IngredientCell(smithing.addition(), "gui.avaritia_tweak.addition")),
+                            new IngredientCell(smithing.additions().get(0),
+                                    "gui.avaritia_tweak.addition_1"),
+                            new IngredientCell(smithing.additions().get(1),
+                                    "gui.avaritia_tweak.addition_2"),
+                            new IngredientCell(smithing.additions().get(2),
+                                    "gui.avaritia_tweak.addition_3")),
                     List.of());
         }
         if (entry instanceof CustomizationEntry.InfinityCatalyst catalyst) {

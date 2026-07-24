@@ -27,6 +27,8 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public final class RecipeSelectScreen extends ThemedEditorScreen {
+    private static final int RECIPE_ROW_HEIGHT = 26;
+    private static final int RECIPE_ROW_STRIDE = 28;
     private final Screen previous;
     private final OutputTarget target;
     private final Consumer<RecipeImportResult> onImported;
@@ -207,7 +209,7 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
     private Component inventoryFilterLabel() {
         return this.inventoryOutput
                 .map(id -> Component.translatable("gui.avaritia_tweak.recipe_import.inventory_selected",
-                        RegistryItemSelectScreen.displayName(id)))
+                        ItemDisplayText.of(id).inline()))
                 .orElseGet(() -> Component.translatable(
                         "gui.avaritia_tweak.recipe_import.inventory_pick"));
     }
@@ -251,13 +253,16 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
         int start = this.page * pageSize;
         for (int index = start; index < Math.min(this.filteredRecipes.size(), start + pageSize); index++) {
             ImportCandidate recipe = this.filteredRecipes.get(index);
-            int y = layout.listTop + (index - start) * 22;
-            String id = ScreenText.fit(this.font, recipe.id().toString(), layout.listWidth - 58);
-            EditorButton row = EditorButton.builder(Component.literal(id), button -> selectRecipe(recipe))
-                    .bounds(layout.left + 34, y, layout.listWidth - 42, 20)
-                    .style(EditorButton.Style.LIST).selected(recipe == this.selected).build();
+            int y = layout.listTop + (index - start) * RECIPE_ROW_STRIDE;
+            ItemDisplayText output = ItemDisplayText.of(recipe.result());
+            EditorButton row = EditorButton.builder(Component.literal(output.name()),
+                            button -> selectRecipe(recipe))
+                    .bounds(layout.left + 34, y, layout.listWidth - 42, RECIPE_ROW_HEIGHT)
+                    .style(EditorButton.Style.LIST)
+                    .secondary(Component.literal(output.id()))
+                    .selected(recipe == this.selected).build();
             this.resultWidgets.add(this.addRenderableWidget(row));
-            this.visibleRows.add(new RecipeRow(recipe, layout.left + 10, y + 1));
+            this.visibleRows.add(new RecipeRow(recipe, layout.left + 10, y + 3));
         }
         this.previousPage.active = this.page > 0;
         this.nextPage.active = this.page < maxPage;
@@ -349,11 +354,13 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
         EditorTheme.renderSlot(graphics, slotX, slotY, slotSize, slotSize, false);
         graphics.renderItem(result, slotX + itemOffset, slotY + itemOffset);
         graphics.renderItemDecorations(this.font, result, slotX + itemOffset, slotY + itemOffset);
+        ItemDisplayText resultDisplay = ItemDisplayText.of(result);
         graphics.drawString(this.font,
-                ScreenText.fit(this.font, result.getHoverName().getString(),
+                ScreenText.fit(this.font, resultDisplay.name(),
                         Math.max(0, layout.detailWidth - slotSize - 8)),
                 slotX + slotSize + 6, slotY + 4, EditorTheme.TEXT, false);
-        graphics.drawString(this.font, Component.translatable("gui.avaritia_tweak.recipe_import.result"),
+        graphics.drawString(this.font, ScreenText.fit(this.font, resultDisplay.id(),
+                        Math.max(0, layout.detailWidth - slotSize - 8)),
                 slotX + slotSize + 6, slotY + 17, EditorTheme.TEXT_FAINT, false);
 
         int y = slotY + slotSize + 6;
@@ -462,7 +469,7 @@ public final class RecipeSelectScreen extends ThemedEditorScreen {
     }
 
     private int pageSize(Layout layout) {
-        return Math.max(1, (layout.detailsBottom - layout.listTop - 4) / 22);
+        return Math.max(1, (layout.detailsBottom - layout.listTop - 4) / RECIPE_ROW_STRIDE);
     }
 
     private int maxPage(int pageSize) {

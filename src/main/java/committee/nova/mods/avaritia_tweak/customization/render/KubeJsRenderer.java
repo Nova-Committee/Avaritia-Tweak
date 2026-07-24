@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
+import committee.nova.mods.avaritia_tweak.customization.model.ExtremeSmithingInputs;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
@@ -152,13 +153,14 @@ public final class KubeJsRenderer implements ArtifactRenderer {
 
     private static void renderExtremeSmithing(StringBuilder script,
                                                CustomizationEntry.ExtremeSmithing smithing) {
+        IngredientSpec addition = ExtremeSmithingInputs.serializedAddition(smithing.additions());
         if (isPlainItem(smithing.template()) && isPlainItem(smithing.base())
-                && isPlainItem(smithing.addition())) {
+                && isPlainItem(addition)) {
             script.append("    avaritia.extreme_smithing(\n")
                     .append("        ").append(itemStack(smithing.result())).append(",\n")
                     .append("        ").append(ingredient(smithing.template())).append(",\n")
                     .append("        ").append(ingredient(smithing.base())).append(",\n")
-                    .append("        ").append(ingredient(smithing.addition())).append("\n")
+                    .append("        ").append(ingredient(addition)).append("\n")
                     .append("    ).id(").append(ScriptEscaper.quote(smithing.id().toString())).append(");\n");
             return;
         }
@@ -167,7 +169,7 @@ public final class KubeJsRenderer implements ArtifactRenderer {
         recipe.addProperty("type", "avaritia:extreme_smithing");
         recipe.add("template", IngredientJson.encode(smithing.template()));
         recipe.add("base", IngredientJson.encode(smithing.base()));
-        recipe.add("addition", IngredientJson.encode(smithing.addition()));
+        recipe.add("addition", IngredientJson.encode(addition));
         recipe.add("result", IngredientJson.stack(smithing.result()));
         renderCustomRecipe(script, smithing.id(), recipe);
     }

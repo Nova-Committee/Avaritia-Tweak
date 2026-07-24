@@ -13,6 +13,8 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -71,8 +73,9 @@ public final class GhostIngredientButton extends AbstractButton {
                 this.isHoveredOrFocused());
         if (this.isHovered()) {
             graphics.renderTooltip(Minecraft.getInstance().font,
-                    Component.literal(current.map(GhostIngredientButton::describe).orElse("Empty ghost ingredient")),
-                    mouseX, mouseY);
+                    current.map(GhostIngredientButton::tooltip)
+                            .orElseGet(() -> List.of(Component.literal("Empty ghost ingredient"))),
+                    Optional.empty(), mouseX, mouseY);
         }
     }
 
@@ -128,7 +131,10 @@ public final class GhostIngredientButton extends AbstractButton {
 
     @Override
     protected void updateWidgetNarration(@NotNull NarrationElementOutput output) {
-        output.add(NarratedElementType.TITLE, this.getMessage());
+        String description = this.value.get().map(GhostIngredientButton::describe)
+                .orElse("Empty ghost ingredient");
+        output.add(NarratedElementType.TITLE,
+                Component.literal(this.getMessage().getString() + ", " + description));
     }
 
     static String describe(IngredientSpec ingredient) {
@@ -141,11 +147,34 @@ public final class GhostIngredientButton extends AbstractButton {
             return "#" + tag.tagId();
         }
         if (ingredient instanceof IngredientSpec.Components components) {
-            return components.itemId() + " (" + (components.strict() ? "strict " : "")
-                    + "data components)";
+            return ItemDisplayText.of(components.itemId()).inline() + " ("
+                    + (components.strict() ? "strict " : "") + "data components)";
         }
         IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
-        return item.itemId() + (item.strictNbt().isPresent() ? " (strict NBT)" : "");
+        return ItemDisplayText.of(item.itemId()).inline()
+                + (item.strictNbt().isPresent() ? " (strict NBT)" : "");
+    }
+
+    private static List<Component> tooltip(IngredientSpec ingredient) {
+        if (ingredient instanceof IngredientSpec.Choice choice) {
+            List<Component> lines = new ArrayList<>();
+            lines.add(Component.literal("OR"));
+            for (int index = 0; index < choice.alternatives().size(); index++) {
+                lines.add(Component.literal((index + 1) + ". "
+                        + describe(choice.alternatives().get(index))));
+            }
+            return List.copyOf(lines);
+        }
+        if (ingredient instanceof IngredientSpec.Tag tag) {
+            return List.of(Component.literal("#" + tag.tagId()));
+        }
+        if (ingredient instanceof IngredientSpec.Components components) {
+            return ItemDisplayText.of(components.itemId()).tooltip(
+                    " (" + (components.strict() ? "strict " : "") + "data components)", "");
+        }
+        IngredientSpec.Item item = (IngredientSpec.Item) ingredient;
+        return ItemDisplayText.of(item.itemId()).tooltip(
+                item.strictNbt().isPresent() ? " (strict NBT)" : "", "");
     }
 
     private static IngredientSpec representative(IngredientSpec ingredient) {

@@ -11,6 +11,7 @@ import committee.nova.mods.avaritia.core.singularity.Singularity;
 import committee.nova.mods.avaritia_tweak.customization.minecraft.MinecraftItemStacks;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
+import committee.nova.mods.avaritia_tweak.customization.model.ExtremeSmithingInputs;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
@@ -130,11 +131,12 @@ public final class AvaritiaRecipeImporter {
                 }
                 if (target == OutputTarget.CRAFTTWEAKER
                         && imported.ingredients.stream().anyMatch(AvaritiaRecipeImporter::containsComponents)) {
-                    return failure(recipeId, "addition", "ingredient.components.target_unsupported",
+                    return failure(recipeId, "additions", "ingredient.components.target_unsupported",
                             "NeoForge data-component predicates require KubeJS");
                 }
                 return new RecipeImportResult.Success(new CustomizationEntry.ExtremeSmithing(recipeId, target,
-                        imported.ingredients.get(0), imported.ingredients.get(1), imported.ingredients.get(2),
+                        imported.ingredients.get(0), imported.ingredients.get(1),
+                        ExtremeSmithingInputs.expandSerializedAddition(imported.ingredients.get(2)),
                         itemStack(smithing.getResultItem(registryAccess))));
             }
             return failure(recipeId, "kind", "recipe.kind.unsupported",

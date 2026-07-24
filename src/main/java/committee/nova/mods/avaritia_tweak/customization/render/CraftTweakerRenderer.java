@@ -1,6 +1,7 @@
 package committee.nova.mods.avaritia_tweak.customization.render;
 
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
+import committee.nova.mods.avaritia_tweak.customization.model.ExtremeSmithingInputs;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
@@ -104,7 +105,8 @@ public final class CraftTweakerRenderer implements ArtifactRenderer {
                     .append("    ").append(ScriptEscaper.quote(smithing.id().toString())).append(",\n")
                     .append("    ").append(ingredient(smithing.template())).append(",\n")
                     .append("    ").append(ingredient(smithing.base())).append(",\n")
-                    .append("    ").append(ingredient(smithing.addition())).append(",\n")
+                    .append("    ").append(ingredient(
+                            ExtremeSmithingInputs.serializedAddition(smithing.additions()))).append(",\n")
                     .append("    ").append(itemStack(smithing.result())).append("\n")
                     .append(");\n");
         } else if (entry instanceof CustomizationEntry.InfinityCatalyst catalyst) {

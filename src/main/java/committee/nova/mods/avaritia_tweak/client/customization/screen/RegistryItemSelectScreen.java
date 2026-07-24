@@ -232,9 +232,7 @@ final class RegistryItemSelectScreen extends ThemedEditorScreen {
     }
 
     static String displayName(ResourceLocation id) {
-        return BuiltInRegistries.ITEM.getOptional(id)
-                .map(item -> new ItemStack(item).getHoverName().getString())
-                .orElse(id.toString());
+        return ItemDisplayText.of(id).name();
     }
 
     private int pageSize(Layout layout) {
