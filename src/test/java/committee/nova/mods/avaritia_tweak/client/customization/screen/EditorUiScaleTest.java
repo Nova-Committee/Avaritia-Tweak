@@ -65,6 +65,19 @@ class EditorUiScaleTest {
     }
 
     @Test
+    void equalColumnsKeepEntryIdAndNoteOnOneBalancedRow() {
+        EditorUiScale.EqualColumns even = EditorUiScale.equalColumns(20, 300, 6);
+        EditorUiScale.EqualColumns odd = EditorUiScale.equalColumns(20, 301, 6);
+
+        assertThat(even).isEqualTo(new EditorUiScale.EqualColumns(20, 147, 173, 147));
+        assertThat(odd.firstX()).isEqualTo(odd.secondX() - odd.firstWidth() - 6);
+        assertThat(odd.secondX() + odd.secondWidth()).isEqualTo(321);
+        assertThat(Math.abs(odd.firstWidth() - odd.secondWidth())).isLessThanOrEqualTo(1);
+        assertThatThrownBy(() -> EditorUiScale.equalColumns(0, 6, 6))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void recipeSelectorKeepsInspectorUsableAtEverySupportedScale() {
         EditorUiScale.SplitPane standard = EditorUiScale.recipeSelectorSplit(720);
         EditorUiScale.SplitPane scaled = EditorUiScale.recipeSelectorSplit(308);
