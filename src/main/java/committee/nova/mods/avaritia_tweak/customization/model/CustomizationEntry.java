@@ -119,11 +119,11 @@ public sealed interface CustomizationEntry permits CustomizationEntry.ShapedTabl
     }
 
     record ExtremeSmithing(ResourceLocation id, OutputTarget target, String note, IngredientSpec template,
-                           IngredientSpec base, IngredientSpec addition,
+                           IngredientSpec base, List<IngredientSpec> additions,
                            ItemStackSpec result) implements CustomizationEntry {
         public ExtremeSmithing(ResourceLocation id, OutputTarget target, IngredientSpec template,
-                               IngredientSpec base, IngredientSpec addition, ItemStackSpec result) {
-            this(id, target, "", template, base, addition, result);
+                               IngredientSpec base, List<IngredientSpec> additions, ItemStackSpec result) {
+            this(id, target, "", template, base, additions, result);
         }
 
         public ExtremeSmithing {
@@ -132,7 +132,7 @@ public sealed interface CustomizationEntry permits CustomizationEntry.ShapedTabl
             Objects.requireNonNull(note, "note");
             Objects.requireNonNull(template, "template");
             Objects.requireNonNull(base, "base");
-            Objects.requireNonNull(addition, "addition");
+            additions = ExtremeSmithingInputs.validateAdditions(additions);
             Objects.requireNonNull(result, "result");
         }
 

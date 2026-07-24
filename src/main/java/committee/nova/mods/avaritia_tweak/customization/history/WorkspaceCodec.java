@@ -11,6 +11,7 @@ import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.EntryKey;
 import committee.nova.mods.avaritia_tweak.customization.model.EntryKind;
+import committee.nova.mods.avaritia_tweak.customization.model.ExtremeSmithingInputs;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
@@ -116,7 +117,7 @@ public final class WorkspaceCodec {
         } else if (entry instanceof CustomizationEntry.ExtremeSmithing smithing) {
             json.add("template", ingredient(smithing.template()));
             json.add("base", ingredient(smithing.base()));
-            json.add("addition", ingredient(smithing.addition()));
+            json.add("additions", ingredients(smithing.additions()));
             json.add("result", itemStack(smithing.result()));
         } else if (entry instanceof CustomizationEntry.InfinityCatalyst catalyst) {
             json.addProperty("group", catalyst.group());
@@ -169,7 +170,7 @@ public final class WorkspaceCodec {
             case EXTREME_SMITHING -> new CustomizationEntry.ExtremeSmithing(id, target, note,
                     ingredient(object(json, "template", path + ".template"), path + ".template"),
                     ingredient(object(json, "base", path + ".base"), path + ".base"),
-                    ingredient(object(json, "addition", path + ".addition"), path + ".addition"),
+                    smithingAdditions(json, path),
                     itemStack(object(json, "result", path + ".result"), path + ".result"));
             case INFINITY_CATALYST -> new CustomizationEntry.InfinityCatalyst(id, target, note,
                     string(json, "group", path + ".group"), ingredients(json, path),
@@ -279,10 +280,28 @@ public final class WorkspaceCodec {
     }
 
     private static List<IngredientSpec> ingredients(JsonObject parent, String path) {
-        JsonArray values = array(parent, "ingredients", path + ".ingredients");
+        return ingredientList(array(parent, "ingredients", path + ".ingredients"),
+                path + ".ingredients");
+    }
+
+    private static List<IngredientSpec> smithingAdditions(JsonObject parent, String path) {
+        if (!parent.has("additions")) {
+            IngredientSpec legacy = ingredient(object(parent, "addition", path + ".addition"),
+                    path + ".addition");
+            return ExtremeSmithingInputs.expandSerializedAddition(legacy);
+        }
+        JsonArray values = array(parent, "additions", path + ".additions");
+        if (values.size() != ExtremeSmithingInputs.ADDITION_SLOT_COUNT) {
+            throw failure("workspace.smithing.additions.size", path + ".additions",
+                    "Extreme smithing requires exactly three addition inputs");
+        }
+        return ingredientList(values, path + ".additions");
+    }
+
+    private static List<IngredientSpec> ingredientList(JsonArray values, String path) {
         List<IngredientSpec> result = new ArrayList<>();
         for (int index = 0; index < values.size(); index++) {
-            String itemPath = path + ".ingredients[" + index + "]";
+            String itemPath = path + "[" + index + "]";
             if (!values.get(index).isJsonObject()) {
                 throw failure("workspace.ingredient.invalid", itemPath, "Ingredient must be an object");
             }

@@ -98,25 +98,27 @@ class RendererTest {
     }
 
     @Test
-    void rendersChoiceIngredientsWithoutDroppingAlternatives() {
+    void rendersThreeSmithingAdditionSlotsAsOneApiMatcherWithoutDroppingInputs() {
         IngredientSpec.Choice choice = new IngredientSpec.Choice(List.of(
                 item("minecraft:stone"), item("minecraft:dirt")));
+        List<IngredientSpec> additions = List.of(item("minecraft:stone"), item("minecraft:dirt"),
+                item("minecraft:diamond"));
         CustomizationEntry.ExtremeSmithing kubeRecipe = new CustomizationEntry.ExtremeSmithing(
                 id("test:choice"), OutputTarget.KUBEJS, item("minecraft:stone"),
-                item("minecraft:diamond"), choice, result());
+                item("minecraft:diamond"), additions, result());
         CustomizationEntry.ExtremeSmithing craftTweakerRecipe = new CustomizationEntry.ExtremeSmithing(
                 id("test:choice"), OutputTarget.CRAFTTWEAKER, item("minecraft:stone"),
-                item("minecraft:diamond"), choice, result());
+                item("minecraft:diamond"), additions, result());
 
         String js = new KubeJsRenderer().render(snapshot(kubeRecipe)).get(0).text();
         String zs = new CraftTweakerRenderer().render(snapshot(craftTweakerRecipe)).get(0).text();
         var encoded = SingularityDatapackRenderer.ingredient(choice).getAsJsonObject();
 
         assertThat(js).contains("avaritia.extreme_smithing(",
-                "Ingredient.of([\"minecraft:stone\", \"minecraft:dirt\"])");
+                "Ingredient.of([\"minecraft:stone\", \"minecraft:dirt\", \"minecraft:diamond\"])");
         assertThat(KubeJsRenderer.ingredient(choice))
                 .isEqualTo("Ingredient.of([\"minecraft:stone\", \"minecraft:dirt\"])");
-        assertThat(zs).contains("(<item:minecraft:stone> | <item:minecraft:dirt>)");
+        assertThat(zs).contains("(<item:minecraft:stone> | <item:minecraft:dirt> | <item:minecraft:diamond>)");
         assertThat(encoded.get("type").getAsString()).isEqualTo("forge:compound");
         assertThat(encoded.getAsJsonArray("children")).hasSize(2);
         assertThat(encoded.getAsJsonArray("children").get(0).getAsJsonObject()
@@ -223,7 +225,8 @@ class RendererTest {
                         item("minecraft:stone"), result(), 1000, 240),
                 new CustomizationEntry.ExtremeSmithing(id("test:smithing"), target,
                         item("minecraft:stone"), item("minecraft:diamond"),
-                        tag("forge:ingots/iron"), result()),
+                        List.of(tag("forge:ingots/iron"), tag("forge:ingots/iron"),
+                                tag("forge:ingots/iron")), result()),
                 new CustomizationEntry.InfinityCatalyst(id("test:catalyst"), target, "default",
                         List.of(item("minecraft:stone")), 2),
                 new CustomizationEntry.EternalSingularity(id("test:eternal"), target,

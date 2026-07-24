@@ -77,7 +77,9 @@ public final class WorkspaceDiffer {
         } else if (entry instanceof CustomizationEntry.ExtremeSmithing smithing) {
             fields.put("template", ingredient(smithing.template()));
             fields.put("base", ingredient(smithing.base()));
-            fields.put("addition", ingredient(smithing.addition()));
+            for (int index = 0; index < smithing.additions().size(); index++) {
+                fields.put("additions[" + index + "]", ingredient(smithing.additions().get(index)));
+            }
             result(fields, smithing.result());
         } else if (entry instanceof CustomizationEntry.InfinityCatalyst catalyst) {
             fields.put("group", catalyst.group());

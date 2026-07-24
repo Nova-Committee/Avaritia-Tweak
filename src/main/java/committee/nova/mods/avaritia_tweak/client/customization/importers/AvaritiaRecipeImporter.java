@@ -10,6 +10,7 @@ import committee.nova.mods.avaritia.common.crafting.recipe.ShapelessTableCraftin
 import committee.nova.mods.avaritia.core.singularity.Singularity;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
+import committee.nova.mods.avaritia_tweak.customization.model.ExtremeSmithingInputs;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
@@ -101,7 +102,8 @@ public final class AvaritiaRecipeImporter {
                     return imported.failure;
                 }
                 return new RecipeImportResult.Success(new CustomizationEntry.ExtremeSmithing(recipe.getId(), target,
-                        imported.ingredients.get(0), imported.ingredients.get(1), imported.ingredients.get(2),
+                        imported.ingredients.get(0), imported.ingredients.get(1),
+                        ExtremeSmithingInputs.expandSerializedAddition(imported.ingredients.get(2)),
                         itemStack(smithing.getResultItem(registryAccess))));
             }
             return failure(recipe, "kind", "recipe.kind.unsupported",

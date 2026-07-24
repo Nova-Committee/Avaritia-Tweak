@@ -88,7 +88,7 @@ public final class WorkspaceValidator {
         }
         if (entry instanceof CustomizationEntry.ExtremeSmithing smithing) {
             return containsComponents(smithing.template()) || containsComponents(smithing.base())
-                    || containsComponents(smithing.addition());
+                    || smithing.additions().stream().anyMatch(WorkspaceValidator::containsComponents);
         }
         if (entry instanceof CustomizationEntry.InfinityCatalyst catalyst) {
             return catalyst.ingredients().stream().anyMatch(WorkspaceValidator::containsComponents);
@@ -121,7 +121,7 @@ public final class WorkspaceValidator {
         } else if (entry instanceof CustomizationEntry.ExtremeSmithing smithing) {
             validateIngredient(smithing.key(), "template", smithing.template(), issues);
             validateIngredient(smithing.key(), "base", smithing.base(), issues);
-            validateIngredient(smithing.key(), "addition", smithing.addition(), issues);
+            validateIngredientList(smithing.key(), "additions", smithing.additions(), issues);
             validateResult(smithing.key(), "result", smithing.result(), issues);
         } else if (entry instanceof CustomizationEntry.InfinityCatalyst catalyst) {
             validateIngredientList(catalyst.key(), "ingredients", catalyst.ingredients(), issues);

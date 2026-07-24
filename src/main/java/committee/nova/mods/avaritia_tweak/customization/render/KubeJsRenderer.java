@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
+import committee.nova.mods.avaritia_tweak.customization.model.ExtremeSmithingInputs;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
@@ -137,7 +138,8 @@ public final class KubeJsRenderer implements ArtifactRenderer {
                     .append("        ").append(itemStack(smithing.result())).append(",\n")
                     .append("        ").append(ingredient(smithing.template())).append(",\n")
                     .append("        ").append(ingredient(smithing.base())).append(",\n")
-                    .append("        ").append(ingredient(smithing.addition())).append("\n")
+                    .append("        ").append(ingredient(
+                            ExtremeSmithingInputs.serializedAddition(smithing.additions()))).append("\n")
                     .append("    ).id(").append(ScriptEscaper.quote(smithing.id().toString())).append(");\n");
         } else if (entry instanceof CustomizationEntry.InfinityCatalyst catalyst) {
             script.append("    avaritia.infinity_catalyst(\n")

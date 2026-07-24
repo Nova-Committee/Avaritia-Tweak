@@ -232,8 +232,7 @@ final class RegistryItemSelectScreen extends Screen {
     }
 
     static String displayName(ResourceLocation id) {
-        var item = ForgeRegistries.ITEMS.getValue(id);
-        return item == null ? id.toString() : new ItemStack(item).getHoverName().getString();
+        return ItemDisplayText.of(id).name();
     }
 
     private int pageSize(Layout layout) {

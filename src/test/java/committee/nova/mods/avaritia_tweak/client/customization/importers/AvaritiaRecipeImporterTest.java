@@ -58,7 +58,8 @@ class AvaritiaRecipeImporterTest {
                 id("test:compressor"), item(), null, 800, 120);
         ExtremeSmithingRecipe smithing = new ExtremeSmithingRecipe(
                 id("test:smithing"), item(), tag(),
-                CompoundIngredient.of(item(), ingredient("{\"item\":\"minecraft:dirt\"}")), null);
+                CompoundIngredient.of(item(), ingredient("{\"item\":\"minecraft:dirt\"}"),
+                        ingredient("{\"item\":\"minecraft:diamond\"}")), null);
 
         CustomizationEntry.ShapedTable importedShaped = (CustomizationEntry.ShapedTable)
                 success(shaped);
@@ -80,10 +81,10 @@ class AvaritiaRecipeImporterTest {
         assertThat(importedShapeless.ingredients()).hasSize(2);
         assertThat(importedCompressor.inputCount()).isEqualTo(800);
         assertThat(importedCompressor.timeCost()).isEqualTo(120);
-        assertThat(importedSmithing.addition()).isInstanceOfSatisfying(IngredientSpec.Choice.class,
-                choice -> assertThat(choice.alternatives()).containsExactly(
-                        new IngredientSpec.Item(id("minecraft:stone")),
-                        new IngredientSpec.Item(id("minecraft:dirt"))));
+        assertThat(importedSmithing.additions()).containsExactly(
+                new IngredientSpec.Item(id("minecraft:stone")),
+                new IngredientSpec.Item(id("minecraft:dirt")),
+                new IngredientSpec.Item(id("minecraft:diamond")));
         assertThat(importedCatalyst.group()).isEqualTo("custom");
         assertThat(importedCatalyst.count()).isEqualTo(3);
         assertThat(importedCatalyst.ingredients()).hasSize(2);
@@ -154,11 +155,10 @@ class AvaritiaRecipeImporterTest {
 
         CustomizationEntry.ExtremeSmithing imported = (CustomizationEntry.ExtremeSmithing) success(recipe);
 
-        assertThat(imported.addition()).isInstanceOfSatisfying(IngredientSpec.Choice.class,
-                choice -> assertThat(choice.alternatives()).extracting(Object::toString)
-                        .anyMatch(value -> value.contains("minecraft:potion"))
-                        .anyMatch(value -> value.contains("avaritia:enhancement_core"))
-                        .anyMatch(value -> value.contains("minecraft:blue_ice")));
+        assertThat(imported.additions()).extracting(Object::toString)
+                .anyMatch(value -> value.contains("minecraft:potion"))
+                .anyMatch(value -> value.contains("avaritia:enhancement_core"))
+                .anyMatch(value -> value.contains("minecraft:blue_ice"));
     }
 
     private CustomizationEntry success(net.minecraft.world.item.crafting.Recipe<?> recipe) {

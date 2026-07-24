@@ -3,6 +3,7 @@ package committee.nova.mods.avaritia_tweak.client.customization;
 import committee.nova.mods.avaritia_tweak.customization.model.CraftingTier;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
 import committee.nova.mods.avaritia_tweak.customization.model.EntryKind;
+import committee.nova.mods.avaritia_tweak.customization.model.ExtremeSmithingInputs;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
@@ -26,7 +27,7 @@ public final class EntryForm {
     private IngredientSpec ingredient;
     private IngredientSpec template;
     private IngredientSpec base;
-    private IngredientSpec addition;
+    private final ArrayList<IngredientSpec> smithingAdditions = new ArrayList<>();
     private ItemStackSpec result;
     private int inputCount;
     private int timeCost;
@@ -50,7 +51,9 @@ public final class EntryForm {
         this.ingredient = new IngredientSpec.Item(stone);
         this.template = new IngredientSpec.Item(stone);
         this.base = new IngredientSpec.Item(stone);
-        this.addition = new IngredientSpec.Item(stone);
+        for (int index = 0; index < ExtremeSmithingInputs.ADDITION_SLOT_COUNT; index++) {
+            this.smithingAdditions.add(new IngredientSpec.Item(stone));
+        }
         this.result = new ItemStackSpec(ResourceLocation.tryParse("minecraft:diamond"), 1);
         this.inputCount = 1000;
         this.timeCost = 240;
@@ -94,7 +97,8 @@ public final class EntryForm {
         } else if (entry instanceof CustomizationEntry.ExtremeSmithing smithing) {
             form.template = smithing.template();
             form.base = smithing.base();
-            form.addition = smithing.addition();
+            form.smithingAdditions.clear();
+            form.smithingAdditions.addAll(smithing.additions());
             form.result = smithing.result();
         } else if (entry instanceof CustomizationEntry.InfinityCatalyst catalyst) {
             form.group = catalyst.group();
@@ -134,7 +138,7 @@ public final class EntryForm {
             case COMPRESSOR -> new CustomizationEntry.Compressor(id, this.target, this.note, this.ingredient,
                     this.result, this.inputCount, this.timeCost);
             case EXTREME_SMITHING -> new CustomizationEntry.ExtremeSmithing(id, this.target, this.note,
-                    this.template, this.base, this.addition, this.result);
+                    this.template, this.base, this.smithingAdditions, this.result);
             case INFINITY_CATALYST -> new CustomizationEntry.InfinityCatalyst(id, this.target, this.note,
                     this.group, this.ingredients, this.count);
             case ETERNAL_SINGULARITY -> new CustomizationEntry.EternalSingularity(id, this.target, this.note,
@@ -247,12 +251,12 @@ public final class EntryForm {
         this.base = base;
     }
 
-    public IngredientSpec addition() {
-        return this.addition;
+    public List<IngredientSpec> smithingAdditions() {
+        return List.copyOf(this.smithingAdditions);
     }
 
-    public void addition(IngredientSpec addition) {
-        this.addition = addition;
+    public void smithingAddition(int index, IngredientSpec addition) {
+        this.smithingAdditions.set(index, addition);
     }
 
     public ItemStackSpec result() {
