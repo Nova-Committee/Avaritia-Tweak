@@ -28,6 +28,16 @@ final class EditorUiScale {
         return width >= minimumWidth && height >= minimumHeight;
     }
 
+    static EqualColumns equalColumns(int x, int width, int gap) {
+        if (width < 2 || gap < 0 || gap > width - 2) {
+            throw new IllegalArgumentException("Equal columns require room for both columns");
+        }
+        int availableWidth = width - gap;
+        int firstWidth = availableWidth / 2;
+        int secondWidth = availableWidth - firstWidth;
+        return new EqualColumns(x, firstWidth, x + firstWidth + gap, secondWidth);
+    }
+
     static EditorHeader editorHeader(int screenWidth) {
         int innerWidth = Math.max(2, screenWidth - EDITOR_HEADER_INSET * 2);
         int preferredThemeWidth = Math.min(124, Math.max(84, screenWidth / 4));
@@ -76,6 +86,9 @@ final class EditorUiScale {
                     + Math.max(1, this.tabWidth - 2);
             return finalTabRight > this.themeX;
         }
+    }
+
+    record EqualColumns(int firstX, int firstWidth, int secondX, int secondWidth) {
     }
 
     record ShapedGrid(int gridX, int gridY, int cellSize, int gridPixels,

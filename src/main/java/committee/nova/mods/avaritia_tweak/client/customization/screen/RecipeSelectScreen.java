@@ -21,7 +21,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -118,16 +120,24 @@ public final class RecipeSelectScreen extends Screen {
         }
         var level = Minecraft.getInstance().level;
         var registryAccess = level.registryAccess();
+        var singularities = List.copyOf(
+                SingularityReloadListener.INSTANCE.getAllSingularities().values());
+        Set<ResourceLocation> generatedSingularityRecipeIds = Set.copyOf(singularities.stream()
+                .filter(singularity -> singularity.isEnabled() && singularity.isRecipeEnabled())
+                .map(singularity -> generatedSingularityRecipeId(singularity.getRegistryName()))
+                .toList());
         if (this.target != OutputTarget.DATAPACK) {
             level.getRecipeManager().getRecipes().stream()
                     .filter(this.importer::supports)
+                    .filter(recipe -> !isGeneratedSingularityRecipe(
+                            recipe.getId(), generatedSingularityRecipeIds))
                     .map(recipe -> new ImportCandidate(recipe.getId(),
                             recipe.getResultItem(registryAccess),
                             recipe.getClass().getSimpleName(),
                             () -> this.importer.importRecipe(recipe, this.target, registryAccess)))
                     .forEach(this.allRecipes::add);
         }
-        SingularityReloadListener.INSTANCE.getAllSingularities().values().stream()
+        singularities.stream()
                 .map(singularity -> new ImportCandidate(singularity.getRegistryName(),
                         SingularityUtils.getItemForSingularity(singularity),
                         "SingularityDefinition",
@@ -135,6 +145,16 @@ public final class RecipeSelectScreen extends Screen {
                 .forEach(this.allRecipes::add);
         this.allRecipes.sort(Comparator.comparing(candidate -> candidate.id().toString()));
         updateFilteredRecipes();
+    }
+
+    static ResourceLocation generatedSingularityRecipeId(ResourceLocation singularityId) {
+        return Objects.requireNonNull(ResourceLocation.tryBuild(
+                singularityId.getNamespace(), singularityId.getPath() + "_singularity"));
+    }
+
+    static boolean isGeneratedSingularityRecipe(ResourceLocation recipeId,
+                                                Set<ResourceLocation> generatedRecipeIds) {
+        return generatedRecipeIds.contains(recipeId);
     }
 
     private void filter(String value) {

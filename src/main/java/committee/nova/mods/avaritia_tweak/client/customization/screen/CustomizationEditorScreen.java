@@ -50,6 +50,7 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
     private static final int OUTPUT_WIDTH = 224;
     private static final int ENTRY_ROW_HEIGHT = 30;
     private static final int ENTRY_PAGINATION_HEIGHT = 26;
+    private static final int ENTRY_FIELD_GAP = 6;
     private static final int INGREDIENT_PAGE_SIZE = 18;
     private final EditorController controller;
     private final WorkspaceDiffer differ = new WorkspaceDiffer();
@@ -326,11 +327,7 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         if (denseTable) {
             addDenseTableEditor(x, y, innerWidth);
         } else {
-            addField("id", Component.translatable("gui.avaritia_tweak.entry_id"),
-                    this.form.idText(), x, y, Math.min(260, innerWidth));
-            y += 30;
-            addField("note", Component.translatable("gui.avaritia_tweak.entry_note"),
-                    this.form.note(), x, y, Math.min(360, innerWidth));
+            addEntryIdentityFields(x, y, innerWidth);
             y += 30;
             int buttonWidth = Math.min(150, innerWidth / 2);
             addTargetButton(x, y, buttonWidth);
@@ -376,16 +373,19 @@ public class CustomizationEditorScreen extends AbstractContainerScreen<RecipeGen
         }).bounds(x, y, width, 20).style(EditorButton.Style.QUIET).build());
     }
 
+    private void addEntryIdentityFields(int x, int y, int width) {
+        EditorUiScale.EqualColumns fields = EditorUiScale.equalColumns(
+                x, width, ENTRY_FIELD_GAP);
+        addField("id", Component.translatable("gui.avaritia_tweak.entry_id"),
+                this.form.idText(), fields.firstX(), y, fields.firstWidth());
+        addField("note", Component.translatable("gui.avaritia_tweak.entry_note"),
+                this.form.note(), fields.secondX(), y, fields.secondWidth());
+    }
+
     private void addDenseTableEditor(int x, int y, int width) {
         int tierWidth = Math.min(76, Math.max(62, width / 4));
         int targetWidth = Math.min(82, Math.max(68, width / 4));
-        int fieldGap = 6;
-        int idWidth = Math.max(58, (width - fieldGap) / 2);
-        int noteWidth = Math.max(1, width - idWidth - fieldGap);
-        addField("id", Component.translatable("gui.avaritia_tweak.entry_id"),
-                this.form.idText(), x, y, idWidth);
-        addField("note", Component.translatable("gui.avaritia_tweak.entry_note"),
-                this.form.note(), x + idWidth + fieldGap, y, noteWidth);
+        addEntryIdentityFields(x, y, width);
         int targetX = x;
         this.labels.add(new Label(targetX, y + 34, kindLabel(this.form.kind()), EditorTheme.AVARITIA_GOLD));
         addTargetButton(targetX, y + 44, targetWidth);

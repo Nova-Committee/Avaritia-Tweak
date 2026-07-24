@@ -7,6 +7,7 @@ import committee.nova.mods.avaritia_tweak.customization.model.EntryKind;
 import committee.nova.mods.avaritia_tweak.customization.model.IngredientSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.ItemStackSpec;
 import committee.nova.mods.avaritia_tweak.customization.model.OutputTarget;
+import committee.nova.mods.avaritia_tweak.customization.model.SingularityAction;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
@@ -105,14 +106,33 @@ class RecipeInspectorDetailsTest {
     }
 
     @Test
-    void inspectorRejectsNonRecipeEntries() {
+    void singularityDefinitionShowsItsRecipeInputAndParameters() {
+        IngredientSpec ingredient = item("minecraft:stone");
         CustomizationEntry.SingularityDefinition definition = new CustomizationEntry.SingularityDefinition(
                 id("test:singularity"), OutputTarget.DATAPACK, "Test", 0xffffff, 0x000000,
-                1, 1, item("minecraft:stone"), true, true);
+                1000, 240, ingredient, true, true);
 
-        assertThatThrownBy(() -> RecipeInspectorDetails.from(definition))
+        RecipeInspectorDetails.Details details = RecipeInspectorDetails.from(definition);
+
+        assertThat(details.kind()).isEqualTo(EntryKind.SINGULARITY_DEFINITION);
+        assertThat(details.columns()).isEqualTo(1);
+        assertThat(details.slotCount()).isEqualTo(1);
+        assertThat(details.cells().get(0)).isEqualTo(
+                new RecipeInspectorDetails.IngredientCell(ingredient, "gui.avaritia_tweak.input"));
+        assertThat(details.attributes()).containsExactly(
+                new RecipeInspectorDetails.Attribute("gui.avaritia_tweak.count", "1000"),
+                new RecipeInspectorDetails.Attribute("gui.avaritia_tweak.time_cost", "240"));
+    }
+
+    @Test
+    void inspectorRejectsEntriesThatCannotAppearInTheImportSelector() {
+        CustomizationEntry.SingularityOperation operation = new CustomizationEntry.SingularityOperation(
+                id("test:remove_all"), OutputTarget.KUBEJS, SingularityAction.REMOVE_ALL,
+                Optional.empty());
+
+        assertThatThrownBy(() -> RecipeInspectorDetails.from(operation))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("SINGULARITY_DEFINITION");
+                .hasMessageContaining("SINGULARITY_OPERATION");
     }
 
     @Test

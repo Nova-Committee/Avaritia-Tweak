@@ -10,9 +10,10 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
-/** Converts an imported domain entry into a read-only recipe-inspector projection. */
+/** Converts an imported recipe or singularity into a read-only inspector projection. */
 final class RecipeInspectorDetails {
     private static final String TIER_GRID = "gui.avaritia_tweak.recipe_import.tier_grid";
+    private static final String INPUT = "gui.avaritia_tweak.input";
     private static final String INPUT_COUNT = "gui.avaritia_tweak.input_count";
     private static final String TIME_COST = "gui.avaritia_tweak.time_cost";
     private static final String GROUP = "gui.avaritia_tweak.group";
@@ -37,7 +38,7 @@ final class RecipeInspectorDetails {
         }
         if (entry instanceof CustomizationEntry.Compressor compressor) {
             return new Details(compressor.kind(), 1, 1,
-                    cells(new IngredientCell(compressor.ingredient(), "gui.avaritia_tweak.input")),
+                    cells(new IngredientCell(compressor.ingredient(), INPUT)),
                     List.of(new Attribute(INPUT_COUNT, Integer.toString(compressor.inputCount())),
                             new Attribute(TIME_COST, Integer.toString(compressor.timeCost()))));
         }
@@ -56,6 +57,12 @@ final class RecipeInspectorDetails {
         if (entry instanceof CustomizationEntry.EternalSingularity eternal) {
             return list(eternal.kind(), eternal.ingredients(), 9,
                     List.of(new Attribute(COUNT, Integer.toString(eternal.count()))));
+        }
+        if (entry instanceof CustomizationEntry.SingularityDefinition singularity) {
+            return new Details(singularity.kind(), 1, 1,
+                    cells(new IngredientCell(singularity.ingredient(), INPUT)),
+                    List.of(new Attribute(COUNT, Integer.toString(singularity.count())),
+                            new Attribute(TIME_COST, Integer.toString(singularity.timeCost()))));
         }
         throw new IllegalArgumentException("Recipe inspector does not support " + entry.kind());
     }
