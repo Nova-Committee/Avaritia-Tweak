@@ -83,6 +83,46 @@ class EditorControllerTest {
     }
 
     @Test
+    void preservesStaleDraftButSubmitsItAgainstTheCurrentHeadVersion() {
+        Clock clock = Clock.fixed(Instant.parse("2026-07-23T12:00:00Z"), ZoneOffset.UTC);
+        WorkspaceSnapshot committed = WorkspaceSnapshot.empty().withEntry(compressor("test:committed", 100));
+        WorkspaceHead head = new WorkspaceHead(4, committed, RenderPlan.of(List.of()));
+        CustomizationEntry draftEntry = new CustomizationEntry.SingularityDefinition(
+                id("test:new_singularity"), OutputTarget.KUBEJS, "singularity.test.new_singularity",
+                0x112233, 0x445566, 1000, 240,
+                new IngredientSpec.Item(id("minecraft:stone")), true, true);
+        WorkspaceSnapshot draftWorkspace = WorkspaceSnapshot.empty().withEntry(draftEntry);
+        DraftState staleDraft = new DraftState(DraftState.CURRENT_SCHEMA_VERSION, 0,
+                clock.instant(), draftWorkspace, Optional.of(draftEntry.key()), "editor");
+        AtomicReference<CommitRequest> captured = new AtomicReference<>();
+        CustomizationCommitTarget target = request -> {
+            captured.set(request);
+            return CompletableFuture.completedFuture(new CommitResult.IoFailure(
+                    "test.stop", Optional.empty(), "captured"));
+        };
+
+        try (DraftStore drafts = new DraftStore(this.temporaryDirectory.resolve("stale-draft.json"),
+                new DraftCodec(new WorkspaceCodec()))) {
+            EditorController controller = new EditorController(head,
+                    new DraftLoadResult.Loaded(staleDraft),
+                    new PreviewService(new WorkspaceValidator(new AcceptingRegistry()),
+                            WorkspaceRenderService.standard()),
+                    target, new EmptyHistory(head), drafts, clock);
+
+            controller.commit("commit recovered singularity").toCompletableFuture().join();
+
+            assertThat(controller.baseVersion()).isEqualTo(4);
+            assertThat(controller.draft()).isEqualTo(draftWorkspace);
+            assertThat(controller.selectedEntry()).contains(draftEntry.key());
+            assertThat(controller.draftWarning()).hasValueSatisfying(warning -> assertThat(warning)
+                    .contains("Draft was based on version 0; changes are shown against current version 4"));
+            assertThat(captured.get()).isNotNull();
+            assertThat(captured.get().baseVersion()).isEqualTo(4);
+            assertThat(captured.get().snapshot()).isEqualTo(draftWorkspace);
+        }
+    }
+
+    @Test
     void restoresOnlyTheRequestedEntryToTheCommittedSnapshot() {
         Clock clock = Clock.fixed(Instant.parse("2026-07-23T12:00:00Z"), ZoneOffset.UTC);
         CustomizationEntry committed = compressor("test:restore", 100);
