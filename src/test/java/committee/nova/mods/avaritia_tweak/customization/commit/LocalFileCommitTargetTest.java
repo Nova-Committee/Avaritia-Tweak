@@ -1,5 +1,9 @@
 package committee.nova.mods.avaritia_tweak.customization.commit;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import committee.nova.mods.avaritia_tweak.customization.history.RepositoryException;
 import committee.nova.mods.avaritia_tweak.customization.history.Revision;
 import committee.nova.mods.avaritia_tweak.customization.model.CustomizationEntry;
@@ -33,6 +37,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LocalFileCommitTargetTest {
     private static final Instant NOW = Instant.parse("2026-07-23T01:02:03Z");
+    private static final Gson JSON = new GsonBuilder()
+            .setPrettyPrinting()
+            .disableHtmlEscaping()
+            .create();
     private final WorkspaceRenderService renderer = WorkspaceRenderService.standard();
 
     @TempDir
@@ -60,6 +68,28 @@ class LocalFileCommitTargetTest {
                 throw new AssertionError(exception);
             }
         });
+    }
+
+    @Test
+    void commitsNewSingularityFromLegacyHeadWithoutANoteField() throws Exception {
+        LocalFileCommitTarget target = target(TransactionFaultInjector.NONE);
+        WorkspaceSnapshot legacy = singularity("test:legacy", OutputTarget.KUBEJS);
+        CommitResult initial = target.commitSync(CommitRequest.previewed(
+                0, legacy, "legacy", this.renderer.render(legacy)));
+        assertThat(initial).isInstanceOf(CommitResult.Success.class);
+        rewriteVersionOneWithoutNote(target);
+
+        WorkspaceSnapshot updated = singularity("test:new_singularity", OutputTarget.KUBEJS);
+        CommitResult result = target.commitSync(CommitRequest.previewed(
+                1, updated, "add singularity", this.renderer.render(updated)));
+
+        assertThat(result).isInstanceOfSatisfying(CommitResult.Success.class,
+                success -> assertThat(success.revision().version()).isEqualTo(2));
+        assertThat(target.repository().loadHead().snapshot()).isEqualTo(updated);
+        assertThat(target.repository().loadHistory()).extracting(Revision::version)
+                .containsExactly(1L, 2L);
+        assertThat(Files.readString(target.repository().draftFile(), StandardCharsets.UTF_8))
+                .contains("\"baseVersion\": 2", "\"id\": \"test:new_singularity\"");
     }
 
     @Test
@@ -221,6 +251,18 @@ class LocalFileCommitTargetTest {
                 "singularity." + value, 0x112233, 0x445566, 1000, 240,
                 new IngredientSpec.Item(ResourceLocation.tryParse("minecraft:stone")), true, true);
         return WorkspaceSnapshot.empty().withEntry(entry);
+    }
+
+    private static void rewriteVersionOneWithoutNote(LocalFileCommitTarget target) throws Exception {
+        JsonObject revision = JsonParser.parseString(Files.readString(
+                target.repository().workspaceFile(), StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonObject snapshot = revision.getAsJsonObject("snapshot");
+        snapshot.getAsJsonArray("entries").get(0).getAsJsonObject().remove("note");
+        revision.addProperty("snapshotSha256",
+                ContentHashes.sha256(JSON.toJson(snapshot) + "\n"));
+        String legacyRevision = JSON.toJson(revision) + "\n";
+        Files.writeString(target.repository().workspaceFile(), legacyRevision, StandardCharsets.UTF_8);
+        Files.writeString(target.repository().historyFile(1), legacyRevision, StandardCharsets.UTF_8);
     }
 
     private static final class TestRegistryLookup implements RegistryLookup {

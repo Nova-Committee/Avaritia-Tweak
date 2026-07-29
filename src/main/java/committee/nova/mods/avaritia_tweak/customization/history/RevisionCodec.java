@@ -90,13 +90,15 @@ public final class RevisionCodec {
                     ? OptionalLong.of(root.get("rollbackOf").getAsLong())
                     : OptionalLong.empty();
             String snapshotSha256 = string(root, "snapshotSha256");
-            WorkspaceDecodeResult workspaceResult = this.workspaceCodec.decode(object(root, "snapshot"));
+            JsonObject snapshotJson = object(root, "snapshot");
+            WorkspaceDecodeResult workspaceResult = this.workspaceCodec.decode(snapshotJson);
             if (workspaceResult instanceof WorkspaceDecodeResult.Failure failure) {
                 return failure("revision.snapshot." + failure.code(), "snapshot." + failure.fieldPath(),
                         failure.message());
             }
             WorkspaceSnapshot snapshot = ((WorkspaceDecodeResult.Success) workspaceResult).snapshot();
-            String actualSnapshotHash = ContentHashes.sha256(this.workspaceCodec.encode(snapshot));
+            // Integrity covers the stored JSON shape, not its compatibility-migrated model form.
+            String actualSnapshotHash = ContentHashes.sha256(this.workspaceCodec.encodeJson(snapshotJson));
             if (!actualSnapshotHash.equals(snapshotSha256)) {
                 return failure("revision.snapshot.checksum", "snapshotSha256",
                         "Snapshot checksum does not match its content");

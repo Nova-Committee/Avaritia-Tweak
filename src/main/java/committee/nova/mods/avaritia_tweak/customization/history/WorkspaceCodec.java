@@ -35,7 +35,11 @@ public final class WorkspaceCodec {
             .create();
 
     public String encode(WorkspaceSnapshot snapshot) {
-        return GSON.toJson(toJson(snapshot)) + "\n";
+        return encodeJson(toJson(snapshot));
+    }
+
+    String encodeJson(JsonObject snapshotJson) {
+        return GSON.toJson(snapshotJson) + "\n";
     }
 
     public JsonObject toJson(WorkspaceSnapshot snapshot) {
